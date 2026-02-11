@@ -31,7 +31,7 @@ services:
       - key: MAIL_FROM
         sync: false
 
-  - type: static
+  - type: static_site
     name: health-lock-web
     rootDir: frontend
     buildCommand: npm ci && npm run build
