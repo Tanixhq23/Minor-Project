@@ -30,3 +30,24 @@ export const logout = async () => {
     // ignore
   }
 };
+
+export const getProfile = async () => {
+  const res = await apiFetch("/api/auth/me");
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error?.message || "Failed to load profile");
+  }
+  return data?.data;
+};
+
+export const updateProfile = async (payload) => {
+  const res = await apiFetch("/api/auth/me", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error?.message || "Failed to update profile");
+  }
+  return data?.data;
+};

@@ -2,8 +2,15 @@ import mongoose from "mongoose";
 
 const patientSchema = new mongoose.Schema(
   {
-    name: { type: String },
-    email: { type: String, index: true },
+    name: { type: String, required: true, trim: true },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      index: true,
+    },
     phone: { type: String },
     passwordHash: { type: String },
     passwordSalt: { type: String },

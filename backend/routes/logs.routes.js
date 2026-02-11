@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { getPatientLogs } from "../controllers/logs.controller.js";
+import { getMyPatientLogs } from "../controllers/logs.controller.js";
+import { requirePatient } from "../middleware/index.js";
+import wrapAsync from "../utils/wrapAsync.js";
 
 const router = Router();
 
-// GET /api/logs/patient/:patientId
-router.get("/patient/:patientId", getPatientLogs);
+router.get("/me", requirePatient, wrapAsync(getMyPatientLogs));
 
 export default router;

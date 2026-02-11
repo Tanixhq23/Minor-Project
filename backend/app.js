@@ -1,15 +1,41 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import routes from "./routes/routes.js";
+import rateLimit from "express-rate-limit";
+import authRoutes from "./routes/auth.routes.js";
+import patientRoutes from "./routes/patient.routes.js";
+import recordsRoutes from "./routes/records.routes.js";
+import logsRoutes from "./routes/logs.routes.js";
 import errorHandler from "./middleware/errorHandler.js";
-import logger from "./config/logger.js";
 import requestLogger from "./middleware/requestLogger.js";
 import { verifyToken } from "./utils/token.js";
 
 const app = express();
+app.set("trust proxy", 1);
 
-// Set up security headers with Helmet
+const normalizeOrigin = (origin) => String(origin || "").trim().replace(/\/+$/, "");
+
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || "http://localhost:5173")
+  .split(",")
+  .map(normalizeOrigin)
+  .filter(Boolean);
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { message: "Too many auth attempts. Try again later." } },
+});
+
+const recordLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { message: "Too many requests. Slow down and retry." } },
+});
+
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -17,29 +43,35 @@ app.use(
         defaultSrc: ["'self'"],
         imgSrc: ["'self'", "data:", "blob:"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        // ADDED Cloudflare access wildcard to script-src
         scriptSrc: [
-          "'self'", 
-          "https://unpkg.com", 
+          "'self'",
+          "https://unpkg.com",
           "https://*.cloudflare.com",
-          "https://*.cloudflareaccess.com", 
-          "'unsafe-inline'"],
+          "https://*.cloudflareaccess.com",
+          "'unsafe-inline'",
+        ],
         frameSrc: ["'self'", "data:", "blob:"],
       },
     },
-  })
+  }),
 );
 
-// Middleware
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(
   cors({
-    origin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(normalizeOrigin(origin))) return callback(null, true);
+      const err = new Error("Not allowed by CORS");
+      err.status = 403;
+      return callback(err);
+    },
     credentials: true,
-  })
+  }),
 );
 app.use(requestLogger);
+
 app.use((req, _res, next) => {
   const cookieHeader = req.headers.cookie || "";
   req.cookies = cookieHeader.split(";").reduce((acc, part) => {
@@ -63,27 +95,28 @@ app.use((req, _res, next) => {
 });
 
 app.use((req, res, next) => {
+  if (req.path === "/api/health") {
+    return res.json({ success: true, data: { status: "ok" } });
+  }
   if (req.path.startsWith("/api/auth")) return next();
   if (req.path.startsWith("/api/records/")) return next();
-  if (req.path.startsWith("/api")) {
-    if (!req.user) {
-      return res.status(401).json({ success: false, error: { message: "Unauthorized" } });
-    }
+  if (req.path.startsWith("/api") && !req.user) {
+    return res.status(401).json({ success: false, error: { message: "Unauthorized" } });
   }
   next();
 });
 
-// Your API routes
-app.use("/api", routes);
+app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/patient", patientRoutes);
+app.use("/api/records", recordLimiter, recordsRoutes);
+app.use("/api/logs", logsRoutes);
 
-// 404 Not Found Handler
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   const error = new Error("Not Found");
   error.status = 404;
   next(error);
 });
 
-// Global Error Handler
 app.use(errorHandler);
 
 export default app;

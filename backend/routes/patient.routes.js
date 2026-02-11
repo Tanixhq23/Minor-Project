@@ -1,13 +1,19 @@
-// FILE: /routes/patient.routes.js
 import { Router } from "express";
-import { uploadHistory, getPatientByEmail } from "../controllers/patient.controller.js"; 
+import {
+  uploadHistory,
+  getPatientRecords,
+  generateQrForExistingRecord,
+} from "../controllers/patient.controller.js";
+import wrapAsync from "../utils/wrapAsync.js";
+import { requirePatient, validateUploadHistoryPayload } from "../middleware/index.js";
 
 const router = Router();
 
-// POST /api/patient/records
-router.post("/records", uploadHistory);
+router
+  .route("/records")
+  .post(requirePatient, validateUploadHistoryPayload, wrapAsync(uploadHistory))
+  .get(requirePatient, wrapAsync(getPatientRecords));
 
-// GET /api/patient/find?email=... <-- Add this new route
-router.get("/find", getPatientByEmail);
+router.post("/records/:id/qr", requirePatient, wrapAsync(generateQrForExistingRecord));
 
 export default router;

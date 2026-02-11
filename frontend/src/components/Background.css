@@ -1,0 +1,90 @@
+.dynamic-background {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 15% 20%, #d7ebff 0%, rgba(215, 235, 255, 0.22) 36%, transparent 60%),
+    radial-gradient(circle at 85% 12%, #cde5ff 0%, rgba(205, 229, 255, 0.18) 30%, transparent 55%),
+    radial-gradient(circle at 70% 85%, #ecf7ff 0%, rgba(236, 247, 255, 0.22) 34%, transparent 62%),
+    linear-gradient(180deg, #f9fcff 0%, #eef4fc 100%);
+  overflow: hidden;
+}
+  
+.shape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(62px);
+  opacity: 0.55;
+  animation: float 18s infinite ease-in-out;
+}
+  
+.shape-1 {
+  top: -8%;
+  left: -8%;
+  width: 46vw;
+  height: 46vw;
+  background: #bad9ff;
+  animation-delay: 0s;
+}
+  
+.shape-2 {
+  bottom: -14%;
+  right: -10%;
+  width: 52vw;
+  height: 52vw;
+  background: #d7ecff;
+  animation-delay: -4s;
+}
+  
+.shape-3 {
+  top: 42%;
+  left: 38%;
+  width: 35vw;
+  height: 35vw;
+  background: #f9fdff;
+  animation-delay: -8s;
+  opacity: 0.48;
+}
+  
+.blur-overlay {
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.18);
+}
+  
+@keyframes float {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  40% {
+    transform: translate(24px, -36px) scale(1.08);
+  }
+  70% {
+    transform: translate(-20px, 24px) scale(0.92);
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+  
+@media (max-width: 768px) {
+  .shape {
+    filter: blur(42px);
+    animation-duration: 24s;
+  }
+
+  .shape-1 {
+    width: 70vw;
+    height: 70vw;
+  }
+
+  .shape-2 {
+    width: 78vw;
+    height: 78vw;
+  }
+
+  .shape-3 {
+    display: none;
+  }
+}

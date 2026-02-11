@@ -1,14 +1,26 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch, getSession, logout } from "../lib/api.js";
+import NavArrow from "../components/NavArrow.jsx";
+import ProfileModal from "../components/ProfileModal.jsx";
+
+const tabs = [
+  { key: "scanner", label: "Scanner" },
+  { key: "patient", label: "Patient Details" },
+  { key: "about", label: "About" },
+  { key: "support", label: "Support" }
+];
 
 export default function DoctorScanner() {
   const navigate = useNavigate();
   const qrInstanceRef = useRef(null);
+  const [activeTab, setActiveTab] = useState("scanner");
   const [scanStatus, setScanStatus] = useState("");
   const [reportError, setReportError] = useState("");
   const [reportFile, setReportFile] = useState("");
-  const [showReport, setShowReport] = useState(false);
+  const [patient, setPatient] = useState(null);
+  const [recordId, setRecordId] = useState("");
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     getSession().then((session) => {
@@ -24,6 +36,7 @@ export default function DoctorScanner() {
     const token = params.get("token");
     if (id && token) {
       fetchReport(id, token);
+      setActiveTab("patient");
     }
   }, []);
 
@@ -39,25 +52,25 @@ export default function DoctorScanner() {
     return qrInstanceRef.current;
   };
 
-  const fetchReport = async (recordId, token) => {
+  const fetchReport = async (id, token) => {
     try {
       setReportError("");
       setScanStatus("QR Code scanned! Attempting to fetch report...");
-      const res = await apiFetch(`/api/records/${recordId}?token=${encodeURIComponent(token)}`, {
-        method: "GET",
-        headers: {}
-      });
+      const res = await apiFetch(`/api/records/${id}?token=${encodeURIComponent(token)}`);
       const data = await res.json();
-      setShowReport(true);
       if (res.ok) {
+        setRecordId(data.data.recordId);
         setReportFile(data.data.medicalData.file);
+        setPatient(data.data.patient || null);
+        setActiveTab("patient");
       } else {
         setReportFile("");
+        setPatient(null);
         setReportError(data?.error?.message || "Report access failed.");
       }
     } catch {
-      setShowReport(true);
       setReportFile("");
+      setPatient(null);
       setReportError("Network error or server unavailable.");
     }
   };
@@ -65,16 +78,14 @@ export default function DoctorScanner() {
   const handleDecodedText = async (decodedText) => {
     try {
       const url = new URL(decodedText);
-      const recordId = url.searchParams.get("id");
+      const id = url.searchParams.get("id");
       const token = url.searchParams.get("token");
-      if (!recordId || !token) {
-        setShowReport(true);
+      if (!id || !token) {
         setReportError("Error: Invalid QR Code data. Missing record ID or token.");
         return;
       }
-      await fetchReport(recordId, token);
+      await fetchReport(id, token);
     } catch {
-      setShowReport(true);
       setReportError("Error: Invalid QR Code data (Not a valid URL).");
     }
   };
@@ -136,176 +147,113 @@ export default function DoctorScanner() {
   };
 
   return (
-    <div>
-      <style>{`
-        body {
-          margin: 0;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
-            Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-          background: #f4f6f9;
-          color: #333;
-        }
-        .container {
-          max-width: 900px;
-          margin: 20px auto;
-          padding: 0 15px;
-        }
-        header {
-          text-align: center;
-          margin-bottom: 20px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        }
-        header h1 {
-          margin: 0;
-          font-size: 1.8rem;
-          color: #1976d2;
-          flex: 1;
-          text-align: left;
-        }
-        header p {
-          color: #555;
-          margin-top: 8px;
-          font-size: 1rem;
-          text-align: left;
-        }
-        .card {
-          background: white;
-          border-radius: 12px;
-          padding: 20px;
-          margin-bottom: 20px;
-          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-        }
-        .card h2, .card h3 {
-          margin-top: 0;
-          color: #1976d2;
-          font-size: 1.3rem;
-        }
-        button {
-          background: #1976d2;
-          color: white;
-          border: none;
-          padding: 10px 18px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 0.95rem;
-          font-weight: 600;
-          margin: 5px;
-          transition: 0.3s;
-        }
-        button:hover { background: #135ca0; }
-        .file-label {
-          display: inline-block;
-          background: #e0e0e0;
-          padding: 10px 16px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-weight: 600;
-          margin-left: 8px;
-          transition: 0.3s;
-        }
-        .file-label:hover { background: #d0d0d0; }
-        #reader {
-          margin-top: 15px;
-          border: 2px dashed #ccc;
-          border-radius: 12px;
-          padding: 10px;
-          min-height: 250px;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          background: #fafafa;
-        }
-        #scan-status-message {
-          margin-top: 10px;
-          font-size: 0.9rem;
-          color: #444;
-        }
-        #report-display-area iframe {
-          border-radius: 8px;
-          margin-top: 15px;
-          background: #fafafa;
-        }
-        .message.error {
-          margin-top: 12px;
-          padding: 10px;
-          border-radius: 6px;
-          background: #fdecea;
-          color: #b71c1c;
-          font-weight: 600;
-        }
-        .icon-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-        }
-        .icon-btn svg { width: 18px; height: 18px; fill: currentColor; }
-        .logout-btn {
-          background: #ffffff;
-          color: #1976d2;
-          border: 1px solid #e0e0e0;
-          padding: 8px 14px;
-          border-radius: 8px;
-          font-weight: 600;
-          cursor: pointer;
-          margin: 0;
-        }
-        .logout-btn:hover { background: #eef4ff; }
-        @media (max-width: 600px) {
-          #reader { min-height: 200px; }
-          button, .file-label { width: 100%; margin-top: 10px; }
-          header { flex-direction: column; align-items: stretch; text-align: center; }
-          header h1, header p { text-align: center; }
-        }
-      `}</style>
+    <div className="page">
+      <header className="header">
+        <div className="header-left">
+          <NavArrow />
+          <h1 className="header-title">Doctor Scanner</h1>
+        </div>
+        <div className="header-actions">
+          <button
+            className="profile-icon-btn"
+            type="button"
+            onClick={() => setProfileOpen(true)}
+            aria-label="Open profile"
+            title="Profile"
+          >
+            P
+          </button>
+          <button className="btn btn-outline" type="button" onClick={onLogout}>Logout</button>
+        </div>
+      </header>
+      <ProfileModal open={profileOpen} role="doctor" onClose={() => setProfileOpen(false)} />
 
       <div className="container">
-        <header>
-          <div>
-            <h1>Doctor Scanner</h1>
-            <p>Scan a patient's QR code or upload an image to view their medical report.</p>
-          </div>
-          <button className="logout-btn" type="button" onClick={onLogout}>Logout</button>
-        </header>
+        <h1 className="page-title">Doctor Dashboard</h1>
 
-        <main>
-          <div className="card scanner-section">
-            <h2>Scan QR Code (Camera)</h2>
-            <div id="reader" width="400px">Camera feed will appear here</div>
-            <div style={{ marginTop: "1rem", textAlign: "center" }}>
-              <button className="icon-btn" type="button" onClick={startScanner}>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M7 3H5a2 2 0 0 0-2 2v2h2V5h2V3zm12 0h-2v2h2v2h2V5a2 2 0 0 0-2-2zM5 19H3v2a2 2 0 0 0 2 2h2v-2H5v-2zm16 0h-2v2h-2v2h2a2 2 0 0 0 2-2v-2zM7 7h10v10H7V7zm2 2v6h6V9H9z"/>
-                </svg>
-                Scan with Camera
+        <div className="layout">
+          <aside className="sidebar">
+            <div className="sidebar-title">Menu</div>
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                className={`sidebar-item ${activeTab === tab.key ? "active" : ""}`}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+              >
+                {tab.label}
               </button>
-              <button type="button" onClick={stopScanner}>Stop Camera</button>
-            </div>
-            <p id="scan-status-message" style={{ color: scanStatus.includes("Error") ? "#b71c1c" : "#2e7d32" }}>
-              {scanStatus}
-            </p>
-          </div>
+            ))}
+          </aside>
 
-          <div className="card upload-section">
-            <h2>Upload Saved QR Image</h2>
-            <p>Already saved the QR code? Upload it from your gallery.</p>
-            <label htmlFor="qr-file-input" className="file-label">
-              <input type="file" id="qr-file-input" accept="image/*" style={{ display: "none" }} onChange={scanFromFile} />
-              Upload QR Image
-            </label>
-          </div>
+          <section className="content">
+            {activeTab === "scanner" && (
+              <>
+                <p className="muted">Scan a patient's QR code or upload an image to view their medical report.</p>
+                <div className="card">
+                  <h2 className="card-title">Scan QR Code (Camera)</h2>
+                  <div id="reader" className="scanner-box">Camera feed will appear here</div>
+                  <div className="center" style={{ marginTop: 16 }}>
+                    <button className="btn" type="button" onClick={startScanner}>Scan with Camera</button>
+                    <button className="btn btn-outline" type="button" onClick={stopScanner}>Stop Camera</button>
+                  </div>
+                  <p className="muted" style={{ marginTop: 8 }}>{scanStatus}</p>
+                </div>
 
-          {showReport && (
-            <div id="report-display-area" className="card">
-              <h3>Medical Report</h3>
-              {reportFile && <iframe title="Medical Report" src={reportFile} width="100%" height="600px" />}
-              {reportError && <div className="message error">{reportError}</div>}
-            </div>
-          )}
-        </main>
+                <div className="card">
+                  <h2 className="card-title">Upload Saved QR Image</h2>
+                  <p className="muted">Already saved the QR code? Upload it from your gallery.</p>
+                  <label htmlFor="qr-file-input" className="file-label">
+                    <input type="file" id="qr-file-input" accept="image/*" style={{ display: "none" }} onChange={scanFromFile} />
+                    Upload QR Image
+                  </label>
+                </div>
+              </>
+            )}
+
+            {activeTab === "patient" && (
+              <div className="card">
+                <h2 className="card-title">Patient Details</h2>
+                {!patient && !reportError && (
+                  <p className="muted">Scan a QR code to view patient details and report.</p>
+                )}
+                {reportError && <div className="message error">{reportError}</div>}
+                {patient && (
+                  <div>
+                    <p><strong>Name:</strong> {patient.name || "N/A"}</p>
+                    <p><strong>Email:</strong> {patient.email || "N/A"}</p>
+                    <p><strong>Phone:</strong> {patient.phone || "N/A"}</p>
+                    {recordId && <p><strong>Record ID:</strong> {recordId}</p>}
+                  </div>
+                )}
+                {reportFile && (
+                  <div style={{ marginTop: 16 }}>
+                    <h3 className="card-title">Medical Report</h3>
+                    <iframe title="Medical Report" src={reportFile} className="responsive-iframe" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "about" && (
+              <div className="card">
+                <h2 className="card-title">About Health-Lock</h2>
+                <p className="muted">
+                  Health-Lock enables secure, time-bound access to patient reports using QR codes.
+                  Doctors can scan or upload QR images to view patient data with explicit consent.
+                </p>
+              </div>
+            )}
+
+            {activeTab === "support" && (
+              <div className="card">
+                <h2 className="card-title">Support</h2>
+                <p className="muted">Need help? Reach out to us at:</p>
+                <p><strong>tanishqlokhande2005@gmail.com</strong></p>
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   );

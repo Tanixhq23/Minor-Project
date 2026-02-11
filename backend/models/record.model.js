@@ -13,6 +13,7 @@ const recordSchema = new mongoose.Schema(
       fileName: { type: String },
       fileType: { type: String },
     },
+    accessUrl: { type: String },
     status: { type: String, enum: ["active", "archived"], default: "active" },
   },
   { timestamps: true }

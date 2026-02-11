@@ -1,15 +1,30 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch, getSession, logout } from "../lib/api.js";
+import NavArrow from "../components/NavArrow.jsx";
+import ProfileModal from "../components/ProfileModal.jsx";
+
+const tabs = [
+  { key: "upload", label: "Upload Report" },
+  { key: "uploads", label: "See Uploads" },
+  { key: "about", label: "About" },
+  { key: "support", label: "Support" }
+];
 
 export default function PatientDashboard() {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("upload");
   const [statusMessage, setStatusMessage] = useState(null);
   const [logMessage, setLogMessage] = useState(null);
-  const [logsHtml, setLogsHtml] = useState("<p>No logs to display yet.</p>");
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [uploads, setUploads] = useState([]);
+  const [uploadsLoading, setUploadsLoading] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [qrLink, setQrLink] = useState("#");
   const [showQr, setShowQr] = useState(false);
+  const [uploadsQrMessage, setUploadsQrMessage] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     getSession().then((session) => {
@@ -18,6 +33,27 @@ export default function PatientDashboard() {
       }
     });
   }, [navigate]);
+
+  useEffect(() => {
+    if (activeTab === "uploads") {
+      fetchUploads();
+    }
+  }, [activeTab]);
+
+  const fetchUploads = async () => {
+    setUploadsLoading(true);
+    try {
+      const res = await apiFetch("/api/patient/records");
+      const data = await res.json();
+      if (res.ok) {
+        setUploads(data.data || []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setUploadsLoading(false);
+    }
+  };
 
   const onLogout = async () => {
     await logout();
@@ -29,13 +65,15 @@ export default function PatientDashboard() {
     setStatusMessage({ type: "info", text: "Reading file and generating QR code..." });
     setShowQr(false);
 
-    const name = event.target.patientName.value;
-    const email = event.target.patientEmail.value;
     const doctorEmail = event.target.doctorEmail.value;
     const file = event.target.medicalData.files[0];
 
     if (!file) {
       setStatusMessage({ type: "error", text: "Please select a PDF file to upload." });
+      return;
+    }
+    if (file.type !== "application/pdf") {
+      setStatusMessage({ type: "error", text: "Only PDF files are allowed." });
       return;
     }
 
@@ -46,7 +84,6 @@ export default function PatientDashboard() {
         const res = await apiFetch("/api/patient/records", {
           method: "POST",
           body: JSON.stringify({
-            patient: { name, email },
             doctorEmail,
             medicalData: { file: reader.result, fileName: file.name, fileType: file.type }
           })
@@ -57,6 +94,7 @@ export default function PatientDashboard() {
           setQrDataUrl(data.data.qrCodeDataUrl);
           setQrLink(data.data.accessUrl);
           setShowQr(true);
+          fetchUploads();
         } else {
           setStatusMessage({ type: "error", text: data?.error?.message || "Unknown error" });
         }
@@ -82,220 +120,208 @@ export default function PatientDashboard() {
     document.body.removeChild(link);
   };
 
-  const handleViewLogs = async (event) => {
-    event.preventDefault();
-    const email = event.target.patientLogEmail.value;
-    if (!email) {
-      setLogMessage({ type: "error", text: "Please enter your email to view logs." });
-      return;
+  const handleGenerateQrForUpload = async (recordId) => {
+    setUploadsQrMessage({ type: "info", text: "Generating QR code for selected upload..." });
+    try {
+      const res = await apiFetch(`/api/patient/records/${recordId}/qr`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setQrDataUrl(data.data.qrCodeDataUrl);
+        setQrLink(data.data.accessUrl);
+        setShowQr(true);
+        setActiveTab("upload");
+        setUploadsQrMessage({ type: "success", text: "QR generated for previous upload." });
+        fetchUploads();
+      } else {
+        setUploadsQrMessage({ type: "error", text: data?.error?.message || "Failed to generate QR." });
+      }
+    } catch {
+      setUploadsQrMessage({ type: "error", text: "Failed to connect to server." });
     }
+  };
+
+  const handleViewLogs = async () => {
+    setLogsLoading(true);
     setLogMessage(null);
-    setLogsHtml("<p>Fetching logs...</p>");
 
     try {
-      const patientRes = await apiFetch(`/api/patient/find?email=${encodeURIComponent(email)}`);
-      const patientData = await patientRes.json();
-      if (!patientRes.ok || !patientData.data?._id) {
-        setLogMessage({ type: "error", text: "Patient not found or no records associated with this email." });
-        setLogsHtml("<p>No logs to display.</p>");
-        return;
-      }
-
-      const logsRes = await apiFetch(`/api/logs/patient/${patientData.data._id}`);
+      const logsRes = await apiFetch("/api/logs/me");
       const logsData = await logsRes.json();
       if (logsRes.ok && logsData.data && logsData.data.length > 0) {
-        const list = logsData.data
-          .map(
-            (log) => `
-              <li>
-                <strong>Record ID:</strong> ${log.record._id}<br>
-                <strong>Accessed By:</strong> ${log.doctor ? log.doctor.name : "Unknown Doctor"}<br>
-                <strong>When:</strong> ${new Date(log.createdAt).toLocaleString()}<br>
-                <strong>IP:</strong> ${log.ip || "N/A"}<br>
-                <strong>User Agent:</strong> ${log.userAgent || "N/A"}
-              </li>`
-          )
-          .join("");
-        setLogsHtml(`<h3>Recent Accesses:</h3><ul>${list}</ul>`);
+        setLogs(logsData.data);
       } else {
         setLogMessage({ type: "info", text: "No access logs found for this patient." });
-        setLogsHtml("<p>No logs to display.</p>");
+        setLogs([]);
       }
     } catch {
       setLogMessage({ type: "error", text: "Failed to fetch logs. Please try again." });
-      setLogsHtml("<p>Error loading logs.</p>");
+      setLogs([]);
+    } finally {
+      setLogsLoading(false);
     }
   };
 
   return (
-    <div>
-      <style>{`
-        body {
-          margin: 0;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-            Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-          background: #f4f6f9;
-          color: #333;
-        }
-        header {
-          background: #1976d2;
-          color: white;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 15px 30px;
-        }
-        header h1 {
-          margin: 0;
-          font-size: 1.5rem;
-        }
-        header button {
-          background: #ffffff;
-          color: #1976d2;
-          border: 1px solid #e0e0e0;
-          padding: 8px 14px;
-          border-radius: 8px;
-          font-weight: 600;
-          cursor: pointer;
-          margin-top: 0;
-        }
-        header button:hover {
-          background: #eef4ff;
-        }
-        h1 {
-          text-align: center;
-          margin-top: 20px;
-          font-size: 1.8rem;
-          color: #222;
-        }
-        .container {
-          max-width: 900px;
-          margin: 20px auto;
-          padding: 0 15px;
-        }
-        .card {
-          background: white;
-          border-radius: 12px;
-          padding: 20px;
-          margin-bottom: 20px;
-          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-        }
-        .card h2 {
-          margin-top: 0;
-          font-size: 1.3rem;
-          color: #1976d2;
-        }
-        label {
-          display: block;
-          margin: 12px 0 6px;
-          font-weight: 600;
-        }
-        input[type="text"],
-        input[type="email"],
-        input[type="file"] {
-          width: 100%;
-          padding: 10px;
-          border-radius: 6px;
-          border: 1px solid #ccc;
-          font-size: 0.95rem;
-        }
-        button {
-          background: #1976d2;
-          color: white;
-          border: none;
-          padding: 10px 18px;
-          margin-top: 15px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 0.95rem;
-          font-weight: 600;
-          transition: 0.3s;
-        }
-        button:hover {
-          background: #135ca0;
-        }
-        #qr-code-display {
-          text-align: center;
-          margin-top: 20px;
-        }
-        #qr-code-img {
-          margin: 15px 0;
-          max-width: 200px;
-        }
-        #access-logs {
-          margin-top: 15px;
-          background: #f9f9f9;
-          border-radius: 6px;
-          padding: 12px;
-          font-size: 0.9rem;
-        }
-        .message { padding: 10px; border-radius: 6px; margin-bottom: 12px; }
-        .message.info { background: #e8f0ff; color: #0b4ea2; font-weight: 600; }
-        .message.success { background: #e6f4ea; color: #19692e; font-weight: 600; }
-        .message.error { background: #fdecea; color: #b71c1c; font-weight: 600; }
-        @media (max-width: 600px) {
-          header {
-            flex-direction: column;
-            text-align: center;
-          }
-        }
-      `}</style>
-
-      <header>
-        <h1>Health-Lock</h1>
-        <button type="button" onClick={onLogout}>Logout</button>
-      </header>
-
-      <h1>Patient Dashboard</h1>
-
-      <main>
-        <div className="container">
-          <div className="card upload-form">
-            <h2>Upload New Report</h2>
-            <p>Upload your medical report and generate a secure QR code for your doctor.</p>
-            <form id="upload-form" onSubmit={handleUpload}>
-              <label htmlFor="patientName">Your Name</label>
-              <input type="text" id="patientName" name="name" placeholder="John Doe" required />
-
-              <label htmlFor="patientEmail">Your Email (for notifications)</label>
-              <input type="email" id="patientEmail" name="email" placeholder="john.doe@example.com" />
-
-              <label htmlFor="doctorEmail">Doctor Email (optional)</label>
-              <input type="email" id="doctorEmail" name="doctorEmail" placeholder="doctor@example.com" />
-
-              <label htmlFor="medicalData">Medical Report (PDF)</label>
-              <input type="file" id="medicalData" name="medicalData" accept="application/pdf" required />
-
-              <button type="submit">Generate QR Code</button>
-            </form>
-          </div>
-
-          {statusMessage && <div className={`message ${statusMessage.type}`}>{statusMessage.text}</div>}
-
-          {showQr && (
-            <div id="qr-code-display" className="card">
-              <h2>Your QR Code</h2>
-              <p>Scan this QR code to grant a doctor access to your medical report.</p>
-              <img id="qr-code-img" alt="QR Code" src={qrDataUrl} />
-              <div>
-                <a id="qr-link" href={qrLink} target="_blank" rel="noreferrer">View Report Link</a>
-              </div>
-              <button id="downloadQrBtn" type="button" onClick={handleDownload}>Download QR Code</button>
-            </div>
-          )}
-
-          <div className="card access-logs-section">
-            <h2>Your Record Access History</h2>
-            <form onSubmit={handleViewLogs}>
-              <label htmlFor="patientLogEmail">Enter your email to view logs:</label>
-              <input type="email" id="patientLogEmail" placeholder="john.doe@example.com" />
-              <button id="viewLogsBtn" type="submit">View Logs</button>
-            </form>
-            {logMessage && <div className={`message ${logMessage.type}`}>{logMessage.text}</div>}
-            <div id="access-logs" dangerouslySetInnerHTML={{ __html: logsHtml }} />
-          </div>
+    <div className="page">
+      <header className="header">
+        <div className="header-left">
+          <NavArrow />
+          <h1 className="header-title">Health-Lock</h1>
         </div>
-      </main>
+        <div className="header-actions">
+          <button
+            className="profile-icon-btn"
+            type="button"
+            onClick={() => setProfileOpen(true)}
+            aria-label="Open profile"
+            title="Profile"
+          >
+            P
+          </button>
+          <button className="btn btn-outline" type="button" onClick={onLogout}>Logout</button>
+        </div>
+      </header>
+      <ProfileModal open={profileOpen} role="patient" onClose={() => setProfileOpen(false)} />
+
+      <div className="container">
+        <h1 className="page-title">Patient Dashboard</h1>
+
+        <div className="layout">
+          <aside className="sidebar">
+            <div className="sidebar-title">Menu</div>
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                className={`sidebar-item ${activeTab === tab.key ? "active" : ""}`}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </aside>
+
+          <section className="content">
+            {activeTab === "upload" && (
+              <div className="card">
+                <h2 className="card-title">Upload New Report</h2>
+                <p className="muted">Upload your medical report from your signed-in patient account and generate a secure QR code.</p>
+                <form className="form" onSubmit={handleUpload}>
+                  <label className="label" htmlFor="doctorEmail">Doctor Email (optional)</label>
+                  <input className="input" type="email" id="doctorEmail" name="doctorEmail" placeholder="doctor@example.com" />
+
+                  <label className="label" htmlFor="medicalData">Medical Report (PDF)</label>
+                  <input className="input" type="file" id="medicalData" name="medicalData" accept="application/pdf" required />
+
+                  <button className="btn" type="submit">Generate QR Code</button>
+                </form>
+
+                {statusMessage && <div className={`message ${statusMessage.type}`} style={{ marginTop: 12 }}>{statusMessage.text}</div>}
+
+                {showQr && (
+                  <div className="center" style={{ marginTop: 16 }}>
+                    <h3 className="card-title">Your QR Code</h3>
+                    <p className="muted">Scan this QR code to grant a doctor access to your medical report.</p>
+                    <img className="qr-img" alt="QR Code" src={qrDataUrl} />
+                    <div>
+                      <a href={qrLink} target="_blank" rel="noreferrer">View Report Link</a>
+                    </div>
+                    <button className="btn" type="button" onClick={handleDownload}>Download QR Code</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "uploads" && (
+              <div className="card">
+                <h2 className="card-title">Your Uploads</h2>
+                <p className="muted">All reports uploaded by you.</p>
+                {uploadsQrMessage && (
+                  <div className={`message ${uploadsQrMessage.type}`} style={{ marginBottom: 12 }}>
+                    {uploadsQrMessage.text}
+                  </div>
+                )}
+                {uploadsLoading ? (
+                  <p className="muted">Loading uploads...</p>
+                ) : uploads.length === 0 ? (
+                  <p className="muted">No uploads found yet.</p>
+                ) : (
+                  <div className="grid">
+                    {uploads.map((record) => (
+                      <div key={record._id} className="card" style={{ boxShadow: "none", border: "1px solid var(--border)" }}>
+                        <strong>{record.medicalData?.fileName || "Medical Report"}</strong>
+                        <p className="muted" style={{ margin: "6px 0" }}>
+                          Uploaded: {new Date(record.createdAt).toLocaleString()}
+                        </p>
+                        <p className="muted">Status: {record.status}</p>
+                        {record.accessUrl && (
+                          <a href={record.accessUrl} target="_blank" rel="noreferrer">
+                            Open Access Link
+                          </a>
+                        )}
+                        <div style={{ marginTop: 10 }}>
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => handleGenerateQrForUpload(record._id)}
+                          >
+                            Generate QR
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "about" && (
+              <div className="card">
+                <h2 className="card-title">About Health-Lock</h2>
+                <p className="muted">
+                  Health-Lock is a secure QR-based medical record sharing system. Patients can upload
+                  reports and generate QR codes for controlled doctor access. The system logs every
+                  access to ensure transparency and safety.
+                </p>
+              </div>
+            )}
+
+            {activeTab === "support" && (
+              <div className="card">
+                <h2 className="card-title">Support</h2>
+                <p className="muted">Need help? Reach out to us at:</p>
+                <p><strong>tanishqlokhande2005@gmail.com</strong></p>
+              </div>
+            )}
+
+            <div className="card" style={{ marginTop: 16 }}>
+              <h2 className="card-title">Record Access History</h2>
+              <button className="btn" type="button" onClick={handleViewLogs} disabled={logsLoading}>
+                {logsLoading ? "Loading..." : "Refresh Logs"}
+              </button>
+              {logMessage && <div className={`message ${logMessage.type}`} style={{ marginTop: 12 }}>{logMessage.text}</div>}
+              {logs.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <h3 className="card-title">Recent Accesses</h3>
+                  <ul>
+                    {logs.map((log) => (
+                      <li key={log._id} style={{ marginBottom: 10 }}>
+                        <strong>Record ID:</strong> {log.record._id}<br />
+                        <strong>Accessed By:</strong> {log.doctor ? log.doctor.name : "Unknown Doctor"}<br />
+                        <strong>When:</strong> {new Date(log.createdAt).toLocaleString()}<br />
+                        <strong>IP:</strong> {log.ip || "N/A"}<br />
+                        <strong>User Agent:</strong> {log.userAgent || "N/A"}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
