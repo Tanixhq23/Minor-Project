@@ -14,6 +14,7 @@ const tabs = [
 export default function DoctorScanner() {
   const navigate = useNavigate();
   const qrInstanceRef = useRef(null);
+  const scanningRef = useRef(false);
   const [activeTab, setActiveTab] = useState("scanner");
   const [scanStatus, setScanStatus] = useState("");
   const [reportError, setReportError] = useState("");
@@ -38,6 +39,15 @@ export default function DoctorScanner() {
       fetchReport(id, token);
       setActiveTab("patient");
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      const instance = qrInstanceRef.current;
+      if (!instance) return;
+      instance.stop().catch(() => {});
+      scanningRef.current = false;
+    };
   }, []);
 
   const onLogout = async () => {
@@ -75,19 +85,57 @@ export default function DoctorScanner() {
     }
   };
 
-  const handleDecodedText = async (decodedText) => {
+  const extractIdAndToken = (decodedText) => {
+    const text = String(decodedText || "").trim();
+    if (!text) return null;
     try {
-      const url = new URL(decodedText);
+      const url = new URL(text);
       const id = url.searchParams.get("id");
       const token = url.searchParams.get("token");
-      if (!id || !token) {
+      if (id && token) return { id, token };
+    } catch {
+      // continue to regex fallback
+    }
+
+    const idMatch = text.match(/[?&]id=([^&]+)/i);
+    const tokenMatch = text.match(/[?&]token=([^&]+)/i);
+    if (idMatch?.[1] && tokenMatch?.[1]) {
+      return {
+        id: decodeURIComponent(idMatch[1]),
+        token: decodeURIComponent(tokenMatch[1]),
+      };
+    }
+    return null;
+  };
+
+  const handleDecodedText = async (decodedText) => {
+    try {
+      const parsed = extractIdAndToken(decodedText);
+      if (!parsed?.id || !parsed?.token) {
         setReportError("Error: Invalid QR Code data. Missing record ID or token.");
         return;
       }
-      await fetchReport(id, token);
+      await fetchReport(parsed.id, parsed.token);
     } catch {
       setReportError("Error: Invalid QR Code data (Not a valid URL).");
     }
+  };
+
+  const pickPreferredCamera = (devices) => {
+    if (!Array.isArray(devices) || devices.length === 0) return null;
+    const rearRegex = /(back|rear|environment|world|traseira|trasera|hind)/i;
+    const rear = devices.find((device) => rearRegex.test(device?.label || ""));
+    return rear || devices[0];
+  };
+
+  const qrScannerConfig = {
+    fps: 12,
+    qrbox: (viewfinderWidth, viewfinderHeight) => {
+      const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+      const size = Math.floor(minEdge * 0.75);
+      return { width: size, height: size };
+    },
+    rememberLastUsedCamera: true,
   };
 
   const startScanner = async () => {
@@ -96,24 +144,42 @@ export default function DoctorScanner() {
       setScanStatus("QR scanner library not loaded.");
       return;
     }
+    if (scanningRef.current) {
+      setScanStatus("Scanner is already running.");
+      return;
+    }
     try {
       const devices = await window.Html5Qrcode.getCameras();
       if (!devices || devices.length === 0) {
         setScanStatus("No cameras found.");
         return;
       }
-      const cameraId = devices[0].id;
-      await instance.start(
-        cameraId,
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          instance.stop().catch(() => {});
-          handleDecodedText(decodedText);
-        },
-        () => {}
-      );
-      setScanStatus("Scanning for QR Code...");
+
+      const preferred = pickPreferredCamera(devices);
+
+      const onSuccess = (decodedText) => {
+        instance.stop().catch(() => {});
+        scanningRef.current = false;
+        handleDecodedText(decodedText);
+      };
+
+      let startedWith = preferred?.label || "camera";
+      try {
+        await instance.start({ facingMode: { exact: "environment" } }, qrScannerConfig, onSuccess, () => {});
+        startedWith = "back camera";
+      } catch {
+        try {
+          await instance.start({ facingMode: "environment" }, qrScannerConfig, onSuccess, () => {});
+          startedWith = "back camera";
+        } catch {
+          await instance.start(preferred.id, qrScannerConfig, onSuccess, () => {});
+        }
+      }
+
+      scanningRef.current = true;
+      setScanStatus(`Scanning for QR Code using ${startedWith}...`);
     } catch (err) {
+      scanningRef.current = false;
       setScanStatus(`Error starting camera: ${err.message || err}`);
     }
   };
@@ -123,6 +189,7 @@ export default function DoctorScanner() {
     if (!instance) return;
     try {
       await instance.stop();
+      scanningRef.current = false;
       setScanStatus("Scanner stopped.");
     } catch {
       // ignore
