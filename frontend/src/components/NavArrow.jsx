@@ -15,7 +15,7 @@ export default function NavArrow({ fallback = "/" }) {
   return (
     <button
       type="button"
-      className="nav-arrow-btn"
+      className="btn btn-outline-secondary btn-sm rounded-circle btn-icon d-inline-flex align-items-center justify-content-center"
       onClick={handleBack}
       aria-label="Go back"
       title="Go back"

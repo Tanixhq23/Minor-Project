@@ -16,11 +16,20 @@ export default function ProfileModal({ open, role, onClose }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const isPatient = role === "patient";
   const isDoctor = role === "doctor";
 
   const title = useMemo(() => (isDoctor ? "Doctor Profile" : "Patient Profile"), [isDoctor]);
+  const alertVariant = useMemo(() => {
+    if (!message?.type) return "info";
+    if (message.type === "error") return "danger";
+    if (message.type === "success") return "success";
+    return "info";
+  }, [message]);
 
   useEffect(() => {
     if (!open) return;
@@ -105,103 +114,155 @@ export default function ProfileModal({ open, role, onClose }) {
   };
 
   return (
-    <div className="profile-modal-overlay" onClick={onClose}>
-      <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="profile-modal-head">
-          <h2 className="card-title">{title}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close profile">
-            x
-          </button>
+    <>
+      <div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true" onClick={onClose}>
+        <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">{title}</h5>
+              <button type="button" className="btn-close" onClick={onClose} aria-label="Close profile" />
+            </div>
+            <div className="modal-body">
+              {loading ? (
+                <p className="text-secondary mb-0">Loading profile...</p>
+              ) : (
+                <form onSubmit={handleSubmit}>
+                  <div className="mb-3">
+                    <label className="form-label" htmlFor="profileName">Full Name</label>
+                    <input
+                      className="form-control"
+                      id="profileName"
+                      value={form.name}
+                      onChange={(e) => onFieldChange("name", e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label" htmlFor="profileEmail">Email</label>
+                    <input
+                      className="form-control"
+                      type="email"
+                      id="profileEmail"
+                      value={form.email}
+                      onChange={(e) => onFieldChange("email", e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  {isPatient && (
+                    <div className="mb-3">
+                      <label className="form-label" htmlFor="profilePhone">Phone</label>
+                      <input
+                        className="form-control"
+                        id="profilePhone"
+                        value={form.phone}
+                        onChange={(e) => onFieldChange("phone", e.target.value)}
+                        placeholder="+1 555 123 4567"
+                      />
+                    </div>
+                  )}
+
+                  {isDoctor && (
+                    <div className="mb-3">
+                      <label className="form-label" htmlFor="profileSpecialization">Specialization</label>
+                      <input
+                        className="form-control"
+                        id="profileSpecialization"
+                        value={form.specialization}
+                        onChange={(e) => onFieldChange("specialization", e.target.value)}
+                        placeholder="Cardiology"
+                        required
+                      />
+                    </div>
+                  )}
+
+                  <hr className="my-3" />
+                  <p className="text-secondary">Change password (optional)</p>
+
+                  <div className="mb-3">
+                    <label className="form-label" htmlFor="profileCurrentPassword">Current Password</label>
+                    <div className="input-group">
+                      <input
+                        className="form-control"
+                        type={showCurrentPassword ? "text" : "password"}
+                        id="profileCurrentPassword"
+                        value={form.currentPassword}
+                        onChange={(e) => onFieldChange("currentPassword", e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => setShowCurrentPassword((prev) => !prev)}
+                        aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
+                        aria-pressed={showCurrentPassword}
+                      >
+                        {showCurrentPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label" htmlFor="profileNewPassword">New Password</label>
+                    <div className="input-group">
+                      <input
+                        className="form-control"
+                        type={showNewPassword ? "text" : "password"}
+                        id="profileNewPassword"
+                        value={form.newPassword}
+                        onChange={(e) => onFieldChange("newPassword", e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => setShowNewPassword((prev) => !prev)}
+                        aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                        aria-pressed={showNewPassword}
+                      >
+                        {showNewPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label" htmlFor="profileConfirmPassword">Confirm New Password</label>
+                    <div className="input-group">
+                      <input
+                        className="form-control"
+                        type={showConfirmPassword ? "text" : "password"}
+                        id="profileConfirmPassword"
+                        value={form.confirmNewPassword}
+                        onChange={(e) => onFieldChange("confirmNewPassword", e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                        aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                        aria-pressed={showConfirmPassword}
+                      >
+                        {showConfirmPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {message && (
+                    <div className={`alert alert-${alertVariant}`} role="alert">
+                      {message.text}
+                    </div>
+                  )}
+
+                  <button className="btn btn-primary" type="submit" disabled={saving}>
+                    {saving ? "Saving..." : "Save Changes"}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
         </div>
-
-        {loading ? (
-          <p className="muted">Loading profile...</p>
-        ) : (
-          <form className="form" onSubmit={handleSubmit}>
-            <label className="label" htmlFor="profileName">Full Name</label>
-            <input
-              className="input"
-              id="profileName"
-              value={form.name}
-              onChange={(e) => onFieldChange("name", e.target.value)}
-              required
-            />
-
-            <label className="label" htmlFor="profileEmail">Email</label>
-            <input
-              className="input"
-              type="email"
-              id="profileEmail"
-              value={form.email}
-              onChange={(e) => onFieldChange("email", e.target.value)}
-              required
-            />
-
-            {isPatient && (
-              <>
-                <label className="label" htmlFor="profilePhone">Phone</label>
-                <input
-                  className="input"
-                  id="profilePhone"
-                  value={form.phone}
-                  onChange={(e) => onFieldChange("phone", e.target.value)}
-                  placeholder="+1 555 123 4567"
-                />
-              </>
-            )}
-
-            {isDoctor && (
-              <>
-                <label className="label" htmlFor="profileSpecialization">Specialization</label>
-                <input
-                  className="input"
-                  id="profileSpecialization"
-                  value={form.specialization}
-                  onChange={(e) => onFieldChange("specialization", e.target.value)}
-                  placeholder="Cardiology"
-                  required
-                />
-              </>
-            )}
-
-            <div className="divider" />
-            <p className="muted">Change password (optional)</p>
-
-            <label className="label" htmlFor="profileCurrentPassword">Current Password</label>
-            <input
-              className="input"
-              type="password"
-              id="profileCurrentPassword"
-              value={form.currentPassword}
-              onChange={(e) => onFieldChange("currentPassword", e.target.value)}
-            />
-
-            <label className="label" htmlFor="profileNewPassword">New Password</label>
-            <input
-              className="input"
-              type="password"
-              id="profileNewPassword"
-              value={form.newPassword}
-              onChange={(e) => onFieldChange("newPassword", e.target.value)}
-            />
-
-            <label className="label" htmlFor="profileConfirmPassword">Confirm New Password</label>
-            <input
-              className="input"
-              type="password"
-              id="profileConfirmPassword"
-              value={form.confirmNewPassword}
-              onChange={(e) => onFieldChange("confirmNewPassword", e.target.value)}
-            />
-
-            {message && <div className={`message ${message.type}`}>{message.text}</div>}
-
-            <button className="btn" type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Save Changes"}
-            </button>
-          </form>
-        )}
       </div>
-    </div>
+      <div className="modal-backdrop fade show" />
+    </>
   );
 }
+
