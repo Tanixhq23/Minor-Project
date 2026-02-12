@@ -22,7 +22,22 @@ const toProfileResponse = (user, role) => ({
   role,
   name: user.name || "",
   email: user.email || "",
-  ...(role === "patient" ? { phone: user.phone || "" } : {}),
+  ...(role === "patient"
+    ? {
+        phone: user.phone || "",
+        healthProfile: {
+          hemoglobin: user.healthProfile?.hemoglobin ?? null,
+          glucose: user.healthProfile?.glucose ?? null,
+          cholesterol: user.healthProfile?.cholesterol ?? null,
+          bmi: user.healthProfile?.bmi ?? null,
+          heartRate: user.healthProfile?.heartRate ?? null,
+          bloodPressureSystolic: user.healthProfile?.bloodPressureSystolic ?? null,
+          bloodPressureDiastolic: user.healthProfile?.bloodPressureDiastolic ?? null,
+          lastAnalyzedAt: user.healthProfile?.lastAnalyzedAt ?? null,
+          lastReportName: user.healthProfile?.lastReportName ?? "",
+        },
+      }
+    : {}),
   ...(role === "doctor" ? { specialization: user.specialization || "" } : {}),
 });
 

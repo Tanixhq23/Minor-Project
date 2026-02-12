@@ -6,6 +6,7 @@ const emptyForm = {
   email: "",
   phone: "",
   specialization: "",
+  healthProfile: null,
   currentPassword: "",
   newPassword: "",
   confirmNewPassword: "",
@@ -43,6 +44,7 @@ export default function ProfileModal({ open, role, onClose }) {
           email: profile?.email || "",
           phone: profile?.phone || "",
           specialization: profile?.specialization || "",
+          healthProfile: profile?.healthProfile || null,
         });
       })
       .catch((err) => {
@@ -101,6 +103,7 @@ export default function ProfileModal({ open, role, onClose }) {
         email: updated?.email || prev.email,
         phone: updated?.phone || "",
         specialization: updated?.specialization || "",
+        healthProfile: updated?.healthProfile || prev.healthProfile || null,
         currentPassword: "",
         newPassword: "",
         confirmNewPassword: "",
@@ -151,15 +154,53 @@ export default function ProfileModal({ open, role, onClose }) {
                   </div>
 
                   {isPatient && (
-                    <div className="mb-3">
-                      <label className="form-label" htmlFor="profilePhone">Phone</label>
-                      <input
-                        className="form-control"
-                        id="profilePhone"
-                        value={form.phone}
-                        onChange={(e) => onFieldChange("phone", e.target.value)}
-                        placeholder="+1 555 123 4567"
-                      />
+                    <div className="mb-3 d-grid gap-3">
+                      <div>
+                        <label className="form-label" htmlFor="profilePhone">Phone</label>
+                        <input
+                          className="form-control"
+                          id="profilePhone"
+                          value={form.phone}
+                          onChange={(e) => onFieldChange("phone", e.target.value)}
+                          placeholder="+1 555 123 4567"
+                        />
+                      </div>
+
+                      <div className="border rounded p-3 bg-light">
+                        <div className="d-flex align-items-center justify-content-between mb-2">
+                          <h6 className="mb-0 fw-semibold">Analyzed Health Values</h6>
+                          <small className="text-secondary">
+                            {form.healthProfile?.lastAnalyzedAt
+                              ? `Last analyzed: ${new Date(form.healthProfile.lastAnalyzedAt).toLocaleString()}`
+                              : "No analysis yet"}
+                          </small>
+                        </div>
+                        {form.healthProfile?.lastReportName && (
+                          <p className="small text-secondary mb-2">Source report: {form.healthProfile.lastReportName}</p>
+                        )}
+                        <div className="row g-2">
+                          {[
+                            ["Hemoglobin", form.healthProfile?.hemoglobin],
+                            ["Glucose", form.healthProfile?.glucose],
+                            ["Cholesterol", form.healthProfile?.cholesterol],
+                            ["BMI", form.healthProfile?.bmi],
+                            ["Heart Rate", form.healthProfile?.heartRate],
+                            [
+                              "Blood Pressure",
+                              form.healthProfile?.bloodPressureSystolic && form.healthProfile?.bloodPressureDiastolic
+                                ? `${form.healthProfile.bloodPressureSystolic}/${form.healthProfile.bloodPressureDiastolic}`
+                                : null,
+                            ],
+                          ].map(([label, value]) => (
+                            <div className="col-sm-6" key={label}>
+                              <div className="border rounded p-2 bg-white h-100">
+                                <div className="small text-secondary">{label}</div>
+                                <div className="fw-semibold">{value ?? "N/A"}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiFetch, getSession } from "../lib/api.js";
-import NavArrow from "../components/NavArrow.jsx";
+import AppNavbar from "../components/AppNavbar.jsx";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -13,7 +13,7 @@ export default function Signup() {
   useEffect(() => {
     getSession().then((session) => {
       if (session?.role) {
-        navigate(session.role === "doctor" ? "/doctor" : "/patient", { replace: true });
+        navigate("/", { replace: true });
       }
     });
   }, [navigate]);
@@ -41,7 +41,7 @@ export default function Signup() {
       if (res.ok) {
         setMessage({ type: "success", text: "Account created! Redirecting..." });
         setTimeout(() => {
-          navigate(data?.data?.role === "doctor" ? "/doctor" : "/patient");
+          navigate("/");
         }, 1200);
       } else {
         setMessage({ type: "error", text: data?.error?.message || "Signup failed." });
@@ -55,12 +55,7 @@ export default function Signup() {
 
   return (
     <div className="min-vh-100 d-flex flex-column">
-      <header className="app-navbar">
-        <div className="container d-flex align-items-center gap-2 py-3">
-          <NavArrow />
-          <h1 className="h5 mb-0 fw-bold">Health-Lock</h1>
-        </div>
-      </header>
+      <AppNavbar showBack title="Health-Lock" aboutTo="/#about" supportTo="/#support" profileTo="/signin" />
 
       <div className="container py-4">
         <div className="text-center mb-4">
@@ -149,4 +144,3 @@ export default function Signup() {
     </div>
   );
 }
-

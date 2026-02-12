@@ -1,14 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch, getSession, logout } from "../lib/api.js";
-import NavArrow from "../components/NavArrow.jsx";
 import ProfileModal from "../components/ProfileModal.jsx";
+import AppNavbar from "../components/AppNavbar.jsx";
 
 const tabs = [
   { key: "scanner", label: "Scanner" },
-  { key: "patient", label: "Patient Details" },
-  { key: "about", label: "About" },
-  { key: "support", label: "Support" }
+  { key: "patient", label: "Patient Details" }
 ];
 
 export default function DoctorScanner() {
@@ -21,6 +19,10 @@ export default function DoctorScanner() {
   const [reportFile, setReportFile] = useState("");
   const [patient, setPatient] = useState(null);
   const [recordId, setRecordId] = useState("");
+  const [profileAccessRequest, setProfileAccessRequest] = useState(null);
+  const [profileAccessMessage, setProfileAccessMessage] = useState(null);
+  const [profileAccessLoading, setProfileAccessLoading] = useState(false);
+  const [approvedProfile, setApprovedProfile] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
@@ -33,6 +35,13 @@ export default function DoctorScanner() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    const allowedTabs = ["scanner", "patient", "about", "support"];
+    if (tab && allowedTabs.includes(tab)) {
+      setActiveTab(tab);
+      return;
+    }
+
     const id = params.get("id");
     const token = params.get("token");
     if (id && token) {
@@ -49,6 +58,34 @@ export default function DoctorScanner() {
       scanningRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!profileAccessRequest?.requestId || profileAccessRequest?.status !== "pending") return;
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await apiFetch(`/api/profile-access/requests/${profileAccessRequest.requestId}`);
+        const data = await res.json();
+        if (!res.ok) return;
+        setProfileAccessRequest((prev) => ({
+          ...(prev || {}),
+          ...data.data,
+          requestId: data.data.requestId,
+        }));
+        if (data.data.status === "approved" && data.data.profile) {
+          setApprovedProfile(data.data.profile);
+          setProfileAccessMessage({ type: "success", text: "Profile access approved by patient." });
+        }
+        if (data.data.status === "expired") {
+          setApprovedProfile(null);
+          setProfileAccessMessage({ type: "error", text: "Request expired. Send a new request." });
+        }
+      } catch {
+        // silent polling failure
+      }
+    }, 7000);
+
+    return () => clearInterval(intervalId);
+  }, [profileAccessRequest?.requestId, profileAccessRequest?.status]);
 
   const onLogout = async () => {
     await logout();
@@ -72,6 +109,9 @@ export default function DoctorScanner() {
         setRecordId(data.data.recordId);
         setReportFile(data.data.medicalData.file);
         setPatient(data.data.patient || null);
+        setProfileAccessRequest(null);
+        setProfileAccessMessage(null);
+        setApprovedProfile(null);
         setActiveTab("patient");
       } else {
         setReportFile("");
@@ -82,6 +122,66 @@ export default function DoctorScanner() {
       setReportFile("");
       setPatient(null);
       setReportError("Network error or server unavailable.");
+    }
+  };
+
+  const requestProfileAccess = async () => {
+    if (!patient?.id || !recordId) {
+      setProfileAccessMessage({ type: "error", text: "Scan a valid report first." });
+      return;
+    }
+    setProfileAccessLoading(true);
+    setProfileAccessMessage(null);
+    try {
+      const res = await apiFetch("/api/profile-access/requests", {
+        method: "POST",
+        body: JSON.stringify({ patientId: patient.id, recordId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setProfileAccessRequest(data.data);
+        setProfileAccessMessage({
+          type: "success",
+          text: "Request sent. Waiting for patient approval (valid for 10 minutes).",
+        });
+      } else {
+        setProfileAccessMessage({ type: "error", text: data?.error?.message || "Failed to request access." });
+      }
+    } catch {
+      setProfileAccessMessage({ type: "error", text: "Failed to connect to server." });
+    } finally {
+      setProfileAccessLoading(false);
+    }
+  };
+
+  const refreshProfileAccessStatus = async () => {
+    if (!profileAccessRequest?.requestId) return;
+    setProfileAccessLoading(true);
+    try {
+      const res = await apiFetch(`/api/profile-access/requests/${profileAccessRequest.requestId}`);
+      const data = await res.json();
+      if (res.ok) {
+        setProfileAccessRequest((prev) => ({
+          ...(prev || {}),
+          ...data.data,
+          requestId: data.data.requestId,
+        }));
+        if (data.data.status === "approved" && data.data.profile) {
+          setApprovedProfile(data.data.profile);
+          setProfileAccessMessage({ type: "success", text: "Profile access approved by patient." });
+        } else if (data.data.status === "expired") {
+          setProfileAccessMessage({ type: "error", text: "Request expired. Send a new request." });
+          setApprovedProfile(null);
+        } else {
+          setProfileAccessMessage({ type: "info", text: `Request status: ${data.data.status}` });
+        }
+      } else {
+        setProfileAccessMessage({ type: "error", text: data?.error?.message || "Failed to fetch status." });
+      }
+    } catch {
+      setProfileAccessMessage({ type: "error", text: "Failed to connect to server." });
+    } finally {
+      setProfileAccessLoading(false);
     }
   };
 
@@ -215,26 +315,15 @@ export default function DoctorScanner() {
 
   return (
     <div className="min-vh-100 d-flex flex-column">
-      <header className="app-navbar">
-        <div className="container d-flex align-items-center justify-content-between py-3">
-          <div className="d-flex align-items-center gap-2">
-            <NavArrow />
-            <h1 className="h5 mb-0 fw-bold">Doctor Scanner</h1>
-          </div>
-          <div className="d-flex align-items-center gap-2">
-            <button
-              className="btn btn-primary btn-icon rounded-circle d-inline-flex align-items-center justify-content-center"
-              type="button"
-              onClick={() => setProfileOpen(true)}
-              aria-label="Open profile"
-              title="Profile"
-            >
-              P
-            </button>
-            <button className="btn btn-outline-secondary" type="button" onClick={onLogout}>Logout</button>
-          </div>
-        </div>
-      </header>
+      <AppNavbar
+        showBack
+        title="Doctor Scanner"
+        aboutTo="/doctor?tab=about"
+        supportTo="/doctor?tab=support"
+        showProfile
+        onProfileClick={() => setProfileOpen(true)}
+        onLogout={onLogout}
+      />
       <ProfileModal open={profileOpen} role="doctor" onClose={() => setProfileOpen(false)} />
 
       <div className="container py-4">
@@ -303,6 +392,74 @@ export default function DoctorScanner() {
                       <div><strong>Email:</strong> {patient.email || "N/A"}</div>
                       <div><strong>Phone:</strong> {patient.phone || "N/A"}</div>
                       {recordId && <div><strong>Record ID:</strong> {recordId}</div>}
+                    </div>
+                  )}
+                  {patient && (
+                    <div className="mt-3">
+                      <h3 className="h6 fw-semibold">Profile Access</h3>
+                      <div className="d-flex flex-wrap gap-2">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          type="button"
+                          onClick={requestProfileAccess}
+                          disabled={profileAccessLoading}
+                        >
+                          {profileAccessLoading ? "Sending..." : "Request Profile Access"}
+                        </button>
+                        {profileAccessRequest?.requestId && (
+                          <button
+                            className="btn btn-outline-primary btn-sm"
+                            type="button"
+                            onClick={refreshProfileAccessStatus}
+                            disabled={profileAccessLoading}
+                          >
+                            Refresh Access Status
+                          </button>
+                        )}
+                      </div>
+                      {profileAccessRequest?.expiresAt && (
+                        <p className="small text-secondary mt-2 mb-0">
+                          Request expires at {new Date(profileAccessRequest.expiresAt).toLocaleString()}
+                        </p>
+                      )}
+                      {profileAccessMessage && (
+                        <div className={`alert alert-${profileAccessMessage.type === "error" ? "danger" : profileAccessMessage.type} mt-2 mb-0`}>
+                          {profileAccessMessage.text}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {approvedProfile && (
+                    <div className="mt-3 border rounded p-3 bg-light">
+                      <h3 className="h6 fw-semibold mb-2">Approved Profile Details</h3>
+                      <div><strong>Name:</strong> {approvedProfile.name || "N/A"}</div>
+                      <div><strong>Email:</strong> {approvedProfile.email || "N/A"}</div>
+                      <div><strong>Phone:</strong> {approvedProfile.phone || "N/A"}</div>
+                      <div className="mt-2"><strong>Health Values:</strong></div>
+                      <div className="row g-2 mt-1">
+                        {[
+                          ["Hemoglobin", approvedProfile.healthProfile?.hemoglobin],
+                          ["Glucose", approvedProfile.healthProfile?.glucose],
+                          ["Cholesterol", approvedProfile.healthProfile?.cholesterol],
+                          ["BMI", approvedProfile.healthProfile?.bmi],
+                          ["Heart Rate", approvedProfile.healthProfile?.heartRate],
+                          [
+                            "Blood Pressure",
+                            approvedProfile.healthProfile?.bloodPressureSystolic &&
+                            approvedProfile.healthProfile?.bloodPressureDiastolic
+                              ? `${approvedProfile.healthProfile.bloodPressureSystolic}/${approvedProfile.healthProfile.bloodPressureDiastolic}`
+                              : null,
+                          ],
+                        ].map(([label, value]) => (
+                          <div className="col-sm-6" key={label}>
+                            <div className="border rounded p-2 bg-white">
+                              <div className="small text-secondary">{label}</div>
+                              <div className="fw-semibold">{value ?? "N/A"}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                   {reportFile && (

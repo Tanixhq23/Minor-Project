@@ -6,6 +6,7 @@ import authRoutes from "./routes/auth.routes.js";
 import patientRoutes from "./routes/patient.routes.js";
 import recordsRoutes from "./routes/records.routes.js";
 import logsRoutes from "./routes/logs.routes.js";
+import profileAccessRoutes from "./routes/profileAccess.routes.js";
 import errorHandler from "./middleware/errorHandler.js";
 import requestLogger from "./middleware/requestLogger.js";
 import { verifyToken } from "./utils/token.js";
@@ -110,6 +111,7 @@ app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/patient", patientRoutes);
 app.use("/api/records", recordLimiter, recordsRoutes);
 app.use("/api/logs", logsRoutes);
+app.use("/api/profile-access", profileAccessRoutes);
 
 app.use((req, _res, next) => {
   const error = new Error("Not Found");

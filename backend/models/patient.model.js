@@ -17,6 +17,17 @@ const patientSchema = new mongoose.Schema(
     passwordIterations: { type: Number },
     passwordKeylen: { type: Number },
     passwordDigest: { type: String },
+    healthProfile: {
+      hemoglobin: { type: Number },
+      glucose: { type: Number },
+      cholesterol: { type: Number },
+      bmi: { type: Number },
+      heartRate: { type: Number },
+      bloodPressureSystolic: { type: Number },
+      bloodPressureDiastolic: { type: Number },
+      lastAnalyzedAt: { type: Date },
+      lastReportName: { type: String },
+    },
   },
   { timestamps: true }
 );

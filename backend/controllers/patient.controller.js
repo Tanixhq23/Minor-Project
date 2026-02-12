@@ -3,6 +3,7 @@ import { createToken } from "../utils/token.js";
 import { generateQRCodeDataUrl } from "../utils/qrcode.js";
 import { sendQrGeneratedEmail } from "../services/notification.js";
 import AppError from "../utils/AppError.js";
+import { analyzeHealthReportPdf } from "../utils/reportAnalyzer.js";
 
 export const uploadHistory = async (req, res) => {
   const { doctorEmail } = req.body;
@@ -79,6 +80,49 @@ export const generateQrForExistingRecord = async (req, res) => {
       accessUrl,
       qrCodeDataUrl: qrCode,
       tokenExpiresIn: "10m",
+    },
+  });
+};
+
+export const deletePatientRecord = async (req, res) => {
+  const { id } = req.params;
+  const deleted = await patientService.deleteRecordByIdForPatient(id, req.user.id);
+  if (!deleted) {
+    throw new AppError(404, "Record not found", "RECORD_NOT_FOUND");
+  }
+
+  return res.json({
+    success: true,
+    data: { recordId: id, deleted: true },
+  });
+};
+
+export const analyzePatientReport = async (req, res) => {
+  const medicalData = req.medicalData;
+  const patient = await patientService.getPatientById(req.user.id);
+  if (!patient) {
+    throw new AppError(404, "Patient not found", "PATIENT_NOT_FOUND");
+  }
+
+  const analysis = analyzeHealthReportPdf(medicalData.file);
+  const updated = await patientService.updatePatientHealthProfile(
+    req.user.id,
+    analysis.metrics,
+    medicalData.fileName
+  );
+  if (!updated) {
+    throw new AppError(404, "Patient not found", "PATIENT_NOT_FOUND");
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      extractedText: analysis.extractedText,
+      reportTypes: analysis.reportTypes,
+      metrics: analysis.metrics,
+      findings: analysis.findings,
+      healthProfile: updated.healthProfile || {},
+      analyzedAt: updated.healthProfile?.lastAnalyzedAt || new Date(),
     },
   });
 };

@@ -86,3 +86,25 @@ export const sendQrAccessedEmail = async ({ email, name, recordId, accessUrl, wh
     `,
   });
 };
+
+export const sendProfileAccessRequestEmail = async ({
+  email,
+  patientName,
+  doctorName,
+  requestId,
+  approvalUrl,
+  expiresAt,
+}) => {
+  await sendMail({
+    to: email,
+    subject: "Doctor requested profile access",
+    html: `
+      <p>Hello ${patientName || "Patient"},</p>
+      <p>Dr. ${doctorName || "Unknown"} requested access to your profile details.</p>
+      <p><strong>Request ID:</strong> ${requestId}</p>
+      <p><strong>Expires:</strong> ${new Date(expiresAt).toLocaleString()}</p>
+      <p>You can approve it from your dashboard using this quick link:</p>
+      <a href="${approvalUrl}">${approvalUrl}</a>
+    `,
+  });
+};
