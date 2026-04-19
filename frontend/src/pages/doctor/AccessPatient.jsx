@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { Html5Qrcode } from "html5-qrcode";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import api from "../../api/axiosClient";
 
@@ -10,6 +11,8 @@ export default function AccessPatient() {
   const [error, setError] = useState("");
   const [history, setHistory] = useState([]);
   const [successMsg, setSuccessMsg] = useState("");
+  const [isScanning, setIsScanning] = useState(false);
+  const scannerRef = useRef(null);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -21,6 +24,12 @@ export default function AccessPatient() {
       }
     };
     fetchHistory();
+
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(console.error);
+      }
+    };
   }, []);
 
   const handleSuccess = (data) => {
@@ -28,6 +37,43 @@ export default function AccessPatient() {
     setTimeout(() => {
       navigate("/doctor/view", { state: { patientId: data.data.patientId } });
     }, 1500);
+  };
+
+  const startScanner = async () => {
+    setIsScanning(true);
+    setError("");
+    const html5QrCode = new Html5Qrcode("reader");
+    scannerRef.current = html5QrCode;
+
+    try {
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        async (decodedText) => {
+          await stopScanner();
+          try {
+            const res = await api.post("/doctor/access/qr", { token: decodedText });
+            handleSuccess(res.data);
+          } catch (err) {
+            setError(err.response?.data?.message || "QR Access failed");
+          }
+        },
+        (errorMessage) => {
+          // ignore scan errors as they happen constantly during scanning
+        }
+      );
+    } catch (err) {
+      setError("Camera access denied or error occurred. Please ensure permissions are granted.");
+      setIsScanning(false);
+    }
+  };
+
+  const stopScanner = async () => {
+    if (scannerRef.current) {
+      await scannerRef.current.stop();
+      scannerRef.current = null;
+    }
+    setIsScanning(false);
   };
 
   const handleOTP = async (e) => {
@@ -61,7 +107,7 @@ export default function AccessPatient() {
     <DashboardLayout>
       <div className="mb-4 text-break">
         <h2 className="fw-bold">Access Patient Records</h2>
-        <p className="text-muted">Enter the generated credentials from the patient to temporarily unlock access.</p>
+        <p className="text-muted">Enter credentials or scan the patient's QR code to temporarily unlock access.</p>
       </div>
 
       {error && (
@@ -79,25 +125,26 @@ export default function AccessPatient() {
 
       <div className="row g-4 mb-5">
         <div className="col-lg-6">
-          <div className="card border-0 shadow-sm p-4 rounded-4 h-100">
+          <div className="card border-0 shadow-sm p-4 rounded-4 h-100 transition-hover">
             <h5 className="fw-bold mb-3 d-flex align-items-center text-primary">
               <i className="bi bi-key-fill me-2"></i>
               OTP Access
             </h5>
             <form onSubmit={handleOTP}>
               <div className="mb-4">
-                <label className="form-label small fw-bold">One-Time Password</label>
+                <label className="form-label small fw-bold text-muted">Six-Digit Password</label>
                 <input 
                   type="text"
-                  className="form-control form-control-lg text-center fw-bold"
-                  style={{ letterSpacing: '4px' }}
+                  className="form-control form-control-lg text-center fw-bold bg-light border-0"
+                  style={{ letterSpacing: '8px', fontSize: '1.5rem' }}
                   placeholder="000000" 
                   value={otp}
                   onChange={(e) => setOtp(e.target.value)}
+                  maxLength={6}
                   required
                 />
               </div>
-              <button type="submit" className="btn btn-primary w-100 py-3 fw-bold shadow-sm">
+              <button type="submit" className="btn btn-primary w-100 py-3 fw-bold shadow-sm rounded-pill">
                 Unlock with OTP
               </button>
             </form>
@@ -105,26 +152,53 @@ export default function AccessPatient() {
         </div>
 
         <div className="col-lg-6">
-          <div className="card border-0 shadow-sm p-4 rounded-4 h-100">
+          <div className="card border-0 shadow-sm p-4 rounded-4 h-100 transition-hover">
             <h5 className="fw-bold mb-3 d-flex align-items-center text-primary">
               <i className="bi bi-qr-code-scan me-2"></i>
               QR Code Access
             </h5>
-            <form onSubmit={handleQRImage}>
-              <div className="mb-4">
-                <label className="form-label small fw-bold">Upload Patient's QR</label>
-                <input 
-                  type="file" 
-                  className="form-control"
-                  accept="image/*"
-                  onChange={(e) => setQrFile(e.target.files[0])}
-                  required
-                />
+            
+            {!isScanning ? (
+              <>
+                <div className="d-grid gap-2 mb-4">
+                  <button 
+                    className="btn btn-primary py-3 fw-bold rounded-pill text-uppercase small"
+                    onClick={startScanner}
+                  >
+                    <i className="bi bi-camera-fill me-2"></i>
+                    Scan with Camera
+                  </button>
+                  <div className="text-center position-relative my-2">
+                    <hr className="text-muted opacity-25" />
+                    <span className="position-absolute top-50 start-50 translate-middle bg-white px-3 small text-muted">OR</span>
+                  </div>
+                </div>
+
+                <form onSubmit={handleQRImage}>
+                  <div className="mb-4 text-center">
+                    <label className="form-label small fw-bold text-muted d-block text-start">Upload Image</label>
+                    <input 
+                      type="file" 
+                      className="form-control bg-light border-0 py-2"
+                      accept="image/*"
+                      onChange={(e) => setQrFile(e.target.files[0])}
+                      required={!isScanning}
+                    />
+                  </div>
+                  <button type="submit" className="btn btn-outline-primary w-100 py-2 fw-bold rounded-pill border-2">
+                    Decode File
+                  </button>
+                </form>
+              </>
+            ) : (
+              <div className="text-center">
+                <div id="reader" className="overflow-hidden rounded-3 mb-3 bg-dark" style={{ minHeight: '300px' }}></div>
+                <button className="btn btn-danger w-100 py-3 fw-bold rounded-pill" onClick={stopScanner}>
+                  <i className="bi bi-x-circle me-2"></i>
+                  Stop Scanner
+                </button>
               </div>
-              <button type="submit" className="btn btn-outline-primary w-100 py-3 fw-bold border-2">
-                Decode & Unlock
-              </button>
-            </form>
+            )}
           </div>
         </div>
       </div>
