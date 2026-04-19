@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const doctorService = require("../services/doctorService");
 const Document = require("../models/Document");
 const Activity = require("../models/Activity");
@@ -8,18 +9,22 @@ const { streamLocalFile } = require("../utils/localFileStream");
 
 async function streamDocument(req, res) {
   const { patientId, documentId } = req.params;
-  const doc = await Document.findOne({ _id: documentId, patientId });
+  
+  const doc = await Document.findOne({ 
+    _id: new mongoose.Types.ObjectId(documentId), 
+    patientId: new mongoose.Types.ObjectId(patientId) 
+  });
 
   if (!doc) {
     throw new AppError("Document not found", 404);
   }
 
-  // Check for download approval in the unified Consent model
+  // Check for download approval IF the download query param is present
   if (req.query.download === "true") {
     const approval = await Consent.findOne({
-      doctorId: req.user.id,
-      patientId: patientId,
-      documentId: documentId,
+      doctorId: new mongoose.Types.ObjectId(req.user.id),
+      patientId: new mongoose.Types.ObjectId(patientId),
+      documentId: new mongoose.Types.ObjectId(documentId),
       type: "grant",
       status: "active"
     });
@@ -29,11 +34,12 @@ async function streamDocument(req, res) {
     }
   }
 
+  // Log activity
   await Activity.create({
-    patientId,
-    doctorId: req.user.id,
+    patientId: new mongoose.Types.ObjectId(patientId),
+    doctorId: new mongoose.Types.ObjectId(req.user.id),
     documentId: doc._id,
-    action: "STREAM_DOC",
+    action: req.query.download === "true" ? "DOWNLOAD_DOC" : "VIEW_DOC",
     ip: req.ip,
     userAgent: req.headers["user-agent"] || "",
   });
@@ -57,8 +63,9 @@ function getDoctorContext(req) {
 
 async function accessWithQr(req, res) {
   const { token } = req.body;
-  const result = await doctorService.getDocumentFromToken(token, req.user.id);
-  return sendResponse(res, { message: "QR access granted", data: result });
+  const result = await doctorService.accessWithQr(token, req.user.id);
+  const message = result.type === "document" ? "Document access granted" : "Patient profiles access granted";
+  return sendResponse(res, { message, data: result });
 }
 
 async function accessWithOtp(req, res) {

@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 const Jimp = require("jimp");
-
 const QrReader = require("qrcode-reader");
 const Activity = require("../models/Activity");
 const Consent = require("../models/Consent");
@@ -32,7 +31,7 @@ async function consumeToken({ token, type, doctorId }) {
 async function createAccessPayload(access) {
   const patient = await User.findById(access.patientId).select("name").lean();
   return {
-    patientId: access.patientId,
+    patientId: access.patientId.toString(),
     patientName: patient?.name,
     expiresAt: access.expiresAt,
     durationMinutes: Math.round((access.expiresAt - access.usedAt) / 60000),
@@ -84,13 +83,13 @@ function calcAge(dob) {
 }
 
 async function getPatientProfile(patientId, doctorContext) {
-  const patient = await User.findOne({ _id: patientId, role: "patient" }).lean();
+  const patient = await User.findOne({ _id: new mongoose.Types.ObjectId(patientId), role: "patient" }).lean();
   if (!patient) throw new AppError("Patient not found", 404);
 
-  const history = await MedicalSummary.find({ patientId }).sort({ createdAt: -1 }).lean();
+  const history = await MedicalSummary.find({ patientId: patient._id }).sort({ createdAt: -1 }).lean();
 
   await Activity.create({
-    patientId,
+    patientId: patient._id,
     doctorId: doctorContext.id,
     action: "VIEW_PROFILE",
     ip: doctorContext.ip,
@@ -113,37 +112,18 @@ async function getPatientProfile(patientId, doctorContext) {
 }
 
 async function getPatientDocuments(patientId, doctorContext, consent) {
-  // Use fuzzy ID matching: check both ObjectId and String formats
-  const patientIdObj = mongoose.Types.ObjectId.isValid(patientId) ? new mongoose.Types.ObjectId(patientId) : null;
+  const pId = new mongoose.Types.ObjectId(patientId);
+  const query = { patientId: pId };
   
-  const query = { 
-    $or: [
-      { patientId: patientIdObj },
-      { patientId: patientId.toString() }
-    ]
-  };
-
   if (consent && consent.documentId) {
-    const docId = consent.documentId.toString();
-    const docIdObj = mongoose.Types.ObjectId.isValid(docId) ? new mongoose.Types.ObjectId(docId) : null;
-    query.$and = [{
-      $or: [
-        { _id: docIdObj },
-        { _id: docId }
-      ]
-    }];
+    query._id = new mongoose.Types.ObjectId(consent.documentId);
   }
 
-  console.log(`[DEBUG] ROBUST QUERY for patient: ${patientId}. Query:`, JSON.stringify(query));
-  
   const docs = await Document.find(query).sort({ createdAt: -1 }).lean();
-  console.log(`[DEBUG] SUCCESS: Found ${docs?.length || 0} documents for ${patientId}`);
-
+  
   const requests = await Consent.find({
-
-
-    doctorId: doctorContext.id,
-    patientId,
+    doctorId: new mongoose.Types.ObjectId(doctorContext.id),
+    patientId: pId,
     type: { $in: ["request", "grant"] }
   }).lean();
 
@@ -153,7 +133,7 @@ async function getPatientDocuments(patientId, doctorContext, consent) {
   }, {});
 
   await Activity.create({
-    patientId,
+    patientId: pId,
     doctorId: doctorContext.id,
     action: "LIST_DOCS",
     ip: doctorContext.ip,
@@ -175,13 +155,10 @@ async function getPatientDocuments(patientId, doctorContext, consent) {
 }
 
 async function requestDownload(doctorId, patientId, documentId) {
-  const existing = await Consent.findOne({ doctorId, patientId, documentId, type: "request" });
-  if (existing) return existing;
-
   return Consent.create({
-    doctorId,
-    patientId,
-    documentId,
+    doctorId: new mongoose.Types.ObjectId(doctorId),
+    patientId: new mongoose.Types.ObjectId(patientId),
+    documentId: new mongoose.Types.ObjectId(documentId),
     type: "request",
     status: "pending",
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -195,15 +172,15 @@ async function getDocumentFromToken(tokenInput, doctorId) {
 
   if (access.documentId) {
     const doc = await Document.findOne({ _id: access.documentId, patientId: access.patientId });
-    if (doc) return { type: "document", doc, patientId: access.patientId };
+    if (doc) return { type: "document", doc, patientId: access.patientId.toString() };
   }
 
-  return { type: "patient", patientId: access.patientId };
+  return { type: "patient", patientId: access.patientId.toString() };
 }
 
 async function getHistory(doctorId) {
   const history = await Consent.find({
-    doctorId,
+    doctorId: new mongoose.Types.ObjectId(doctorId),
     type: "grant",
     status: "active",
     expiresAt: { $gt: new Date() }
