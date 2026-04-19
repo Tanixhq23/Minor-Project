@@ -12,4 +12,7 @@ const documentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+documentSchema.index({ patientId: 1 });
+
 module.exports = mongoose.model("Document", documentSchema);
+

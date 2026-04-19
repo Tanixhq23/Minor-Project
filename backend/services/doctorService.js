@@ -113,17 +113,34 @@ async function getPatientProfile(patientId, doctorContext) {
 }
 
 async function getPatientDocuments(patientId, doctorContext, consent) {
-  const query = { patientId: new mongoose.Types.ObjectId(patientId) };
+  // Use fuzzy ID matching: check both ObjectId and String formats
+  const patientIdObj = mongoose.Types.ObjectId.isValid(patientId) ? new mongoose.Types.ObjectId(patientId) : null;
+  
+  const query = { 
+    $or: [
+      { patientId: patientIdObj },
+      { patientId: patientId.toString() }
+    ]
+  };
+
   if (consent && consent.documentId) {
-    query._id = new mongoose.Types.ObjectId(consent.documentId);
+    const docId = consent.documentId.toString();
+    const docIdObj = mongoose.Types.ObjectId.isValid(docId) ? new mongoose.Types.ObjectId(docId) : null;
+    query.$and = [{
+      $or: [
+        { _id: docIdObj },
+        { _id: docId }
+      ]
+    }];
   }
 
-  console.log(`[DEBUG] Fetching docs for patient: ${patientId}. Query:`, query);
+  console.log(`[DEBUG] ROBUST QUERY for patient: ${patientId}. Query:`, JSON.stringify(query));
   
   const docs = await Document.find(query).sort({ createdAt: -1 }).lean();
-  console.log(`[DEBUG] Found ${docs?.length || 0} documents.`);
+  console.log(`[DEBUG] SUCCESS: Found ${docs?.length || 0} documents for ${patientId}`);
 
   const requests = await Consent.find({
+
 
     doctorId: doctorContext.id,
     patientId,
