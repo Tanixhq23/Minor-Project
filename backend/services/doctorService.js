@@ -11,6 +11,7 @@ const User = require("../models/User");
 
 const AppError = require("../utils/AppError");
 const { hashToken } = require("../utils/tokens");
+const env = require("../config/env");
 
 async function consumeToken({ token, type, doctorId }) {
   return AccessToken.findOneAndUpdate(
@@ -176,7 +177,7 @@ async function getPatientDocuments(patientId, doctorContext, consent) {
     originalName: doc.originalName,
     mimeType: doc.mimeType,
     size: doc.size,
-    fileUrl: `${process.env.APP_BASE_URL}/api/doctor/patient/${patientId}/documents/stream/${doc._id}`,
+    fileUrl: `${env.appBaseUrl}/api/doctor/patient/${patientId}/documents/stream/${doc._id}`,
     createdAt: doc.createdAt,
     approvalStatus: requestMap[doc._id.toString()] || "none"
   }));
