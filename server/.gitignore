@@ -1,0 +1,35 @@
+# Dependency directories
+node_modules/
+
+# Environment files
+.env
+.env.test
+.env.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Production
+dist/
+build/
+
+# IDE files
+.vscode/
+.idea/
+
+# Testing
+coverage/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Storage and Uploads
+storage/*
+!storage/.gitkeep
+uploads/*
+!uploads/.gitkeep
