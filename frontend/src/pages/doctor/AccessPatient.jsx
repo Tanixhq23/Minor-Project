@@ -35,7 +35,7 @@ export default function AccessPatient() {
   const handleSuccess = (data) => {
     setSuccessMsg(`Connection Established: Securely connected to ${data.data?.patientName || "Patient"}`);
     setTimeout(() => {
-      navigate("/doctor/view", { state: { patientId: data.data.patientId } });
+      navigate(`/doctor/view/${data.data.patientId}`);
     }, 1500);
   };
 
@@ -246,7 +246,7 @@ export default function AccessPatient() {
                         <td className="px-4 text-end">
                           <button 
                             className="btn btn-primary btn-sm px-4 fw-bold rounded-pill"
-                            onClick={() => navigate("/doctor/view", { state: { patientId: h.patientId } })}
+                            onClick={() => navigate(`/doctor/view/${h.patientId}`)}
                           >
                             Open Session
                           </button>

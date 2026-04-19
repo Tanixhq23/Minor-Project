@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import api from "../../api/axiosClient";
 
 export default function PatientView() {
-  const location = useLocation();
+  const { patientId } = useParams();
   const navigate = useNavigate();
-  const patientId = location.state?.patientId;
 
   const [profile, setProfile] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState("");
+
 
   useEffect(() => {
     if (!patientId) {

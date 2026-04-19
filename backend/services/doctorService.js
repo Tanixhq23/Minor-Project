@@ -1,4 +1,6 @@
+const mongoose = require("mongoose");
 const Jimp = require("jimp");
+
 const QrReader = require("qrcode-reader");
 const Activity = require("../models/Activity");
 const Consent = require("../models/Consent");
@@ -111,11 +113,18 @@ async function getPatientProfile(patientId, doctorContext) {
 }
 
 async function getPatientDocuments(patientId, doctorContext, consent) {
-  const query = { patientId };
-  if (consent && consent.documentId) query._id = consent.documentId;
+  const query = { patientId: new mongoose.Types.ObjectId(patientId) };
+  if (consent && consent.documentId) {
+    query._id = new mongoose.Types.ObjectId(consent.documentId);
+  }
 
+  console.log(`[DEBUG] Fetching docs for patient: ${patientId}. Query:`, query);
+  
   const docs = await Document.find(query).sort({ createdAt: -1 }).lean();
+  console.log(`[DEBUG] Found ${docs?.length || 0} documents.`);
+
   const requests = await Consent.find({
+
     doctorId: doctorContext.id,
     patientId,
     type: { $in: ["request", "grant"] }

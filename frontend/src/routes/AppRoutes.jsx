@@ -64,9 +64,10 @@ export default function AppRoutes() {
             <Route path="/doctor/access" element={
               <ProtectedRoute allowedRole="doctor"><AccessPatient /></ProtectedRoute>
             } />
-            <Route path="/doctor/view" element={
+            <Route path="/doctor/view/:patientId" element={
               <ProtectedRoute allowedRole="doctor"><PatientView /></ProtectedRoute>
             } />
+
 
             <Route path="*" element={<NotFound />} />
           </Routes>
