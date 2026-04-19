@@ -18,7 +18,7 @@ export default function PatientView() {
       return;
     }
 
-    const loadData = async () => {
+    const loadData = async (isInitial = false) => {
       try {
         const profRes = await api.get(`/doctor/patient/${patientId}`);
         setProfile(profRes.data?.data?.profile);
@@ -27,10 +27,17 @@ export default function PatientView() {
         setDocuments(docRes.data?.data?.documents || []);
       } catch (err) {
         console.error(err);
-        setError("Failed to fetch patient data. Consent session may have expired.");
+        if (isInitial) setError("Failed to fetch patient data. Consent session may have expired.");
       }
     };
-    loadData();
+    
+    loadData(true);
+
+    const interval = setInterval(() => {
+      loadData(false);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, [patientId, navigate]);
 
   return (

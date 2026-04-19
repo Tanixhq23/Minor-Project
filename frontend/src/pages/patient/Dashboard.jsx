@@ -8,7 +8,8 @@ export default function Dashboard() {
   const [downloadRequests, setDownloadRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
+  const fetchData = async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     try {
       const docRes = await api.get("/patient/documents");
       setDocuments(docRes.data?.data?.documents || []);
@@ -21,12 +22,18 @@ export default function Dashboard() {
     } catch (err) {
       console.error("Dashboard fetch failed", err);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(true);
+
+    const interval = setInterval(() => {
+      fetchData(false);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleRespond = async (requestId, status) => {
