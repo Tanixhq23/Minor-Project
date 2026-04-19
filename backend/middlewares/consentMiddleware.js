@@ -1,36 +1,25 @@
-const AccessToken = require("../models/AccessToken");
-const DoctorHistory = require("../models/DoctorHistory");
+const Consent = require("../models/Consent");
 const AppError = require("../utils/AppError");
 
 async function requireConsent(req, res, next) {
-  const patientId = req.params.patientId;
+  const { patientId } = req.params;
   const doctorId = req.user.id;
 
-  const consent = await AccessToken.findOne({
-    doctorId: req.user.id,
+  const consent = await Consent.findOne({
+    doctorId,
     patientId,
-    revokedAt: null,
+    status: "active",
     expiresAt: { $gt: new Date() },
   });
 
-  if (consent) {
-    req.consent = consent;
-    return next();
+  if (!consent) {
+    throw new AppError("No active consent or session has expired", 403);
   }
 
-  // Fallback: Check for persistent history (3-day window)
-  const history = await DoctorHistory.findOne({
-    doctorId: req.user.id,
-    patientId,
-    expiresAt: { $gt: new Date() }
-  });
-
-  if (history) {
-    return next();
-  }
-
-  throw new AppError("No active consent or expired session", 403);
+  req.consent = consent;
+  next();
 }
+
 
 module.exports = {
   requireConsent,

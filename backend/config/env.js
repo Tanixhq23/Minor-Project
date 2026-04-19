@@ -15,7 +15,9 @@ const env = {
   tokenTtlMin: Number(process.env.TOKEN_TTL_MIN || 15),
   otpTtlMin: Number(process.env.OTP_TTL_MIN || 8),
   corsOrigin: process.env.CORS_ORIGIN || "*",
-  appBaseUrl: process.env.APP_BASE_URL || (process.env.NODE_ENV === "production" ? "https://healthlock-backend.onrender.com" : "http://localhost:5000"),
+  appBaseUrl: (process.env.RENDER || process.env.NODE_ENV === "production") 
+    ? (process.env.APP_BASE_URL || "https://healthlock-backend.onrender.com")
+    : (process.env.APP_BASE_URL || "http://localhost:5000"),
 };
 
 module.exports = env;

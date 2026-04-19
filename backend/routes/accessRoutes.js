@@ -1,52 +1,56 @@
 const router = require("express").Router();
 const asyncHandler = require("../utils/asyncHandler");
-const AccessToken = require("../models/AccessToken");
+const Consent = require("../models/Consent");
 const Document = require("../models/Document");
-const AccessLog = require("../models/AccessLog");
+const Activity = require("../models/Activity");
 const AppError = require("../utils/AppError");
 const { hashToken } = require("../utils/tokens");
+const { streamLocalFile } = require("../utils/localFileStream");
 
 router.get("/:token", asyncHandler(async (req, res) => {
   const { token } = req.params;
   const tokenHash = hashToken(token);
 
-  const accessRecord = await AccessToken.findOne({
+  const consent = await Consent.findOne({
     tokenHash,
     type: "qr",
-    revokedAt: null,
+    status: "active",
     expiresAt: { $gt: new Date() },
   });
 
-  if (!accessRecord) {
+  if (!consent) {
     throw new AppError("This QR code is invalid, expired, or has been revoked.", 404);
   }
+
   let doc;
-  if (accessRecord.documentId) {
-    doc = await Document.findOne({ _id: accessRecord.documentId, patientId: accessRecord.patientId }).lean();
+  if (consent.documentId) {
+    doc = await Document.findOne({ _id: consent.documentId, patientId: consent.patientId }).lean();
   } else {
+    // Blanket access
     return res.status(200).json({
       success: true,
-      message: "Blanket access QR — please use the doctor dashboard to view all documents.",
-      data: { patientId: accessRecord.patientId },
+      message: "Access granted — please use the professional dashboard to view records.",
+      data: { patientId: consent.patientId },
     });
   }
 
   if (!doc) {
-    throw new AppError("Document not found or has been deleted.", 404);
+    throw new AppError("Document not found.", 404);
   }
-  await AccessToken.findByIdAndUpdate(accessRecord._id, { $set: { usedAt: new Date() } });
 
-  await AccessLog.create({
-    patientId: accessRecord.patientId,
-    doctorId: accessRecord.doctorId || accessRecord.patientId,
+  // Log usage
+  consent.usedAt = new Date();
+  await consent.save();
+
+  await Activity.create({
+    patientId: consent.patientId,
+    doctorId: consent.doctorId || consent.patientId, // Self-access if scanned by user
     documentId: doc._id,
     action: "STREAM_DOC",
     ip: req.ip,
     userAgent: req.headers["user-agent"] || "",
   });
 
-  // Use the proxy to stream the file instead of redirecting
-  const { streamLocalFile } = require("../utils/localFileStream");
   return await streamLocalFile(doc.storagePath, doc.mimeType, res);
 }));
 

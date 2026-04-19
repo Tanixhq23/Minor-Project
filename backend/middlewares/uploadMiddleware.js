@@ -1,6 +1,4 @@
 const multer = require("multer");
-const fs = require("fs");
-const path = require("path");
 const AppError = require("../utils/AppError");
 
 const DOCUMENT_MIME_TYPES = [
@@ -11,26 +9,10 @@ const DOCUMENT_MIME_TYPES = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 const QR_IMAGE_MIME_TYPES = ["image/jpeg", "image/png"];
-const DOCUMENT_MAX_SIZE = 20 * 1024 * 1024; // 20 MB
+const DOCUMENT_MAX_SIZE = 20 * 1024 * 1024;
 const QR_IMAGE_MAX_SIZE = 5 * 1024 * 1024;
 
-// Storage configuration with custom path per patient
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const userId = req.user.id;
-    const dir = path.join(process.cwd(), "uploads", userId);
-
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + "-" + uniqueSuffix + ext);
-  },
-});
+const storage = multer.memoryStorage();
 
 function createMimeFilter(allowedMimeTypes) {
   return function fileFilter(req, file, cb) {
@@ -44,7 +26,7 @@ function createMimeFilter(allowedMimeTypes) {
 const documentUpload = multer({
   storage: storage,
   fileFilter: createMimeFilter(DOCUMENT_MIME_TYPES),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+  limits: { fileSize: DOCUMENT_MAX_SIZE },
 });
 
 const qrImageUpload = multer({

@@ -3,7 +3,7 @@ const sendResponse = require("../utils/apiResponse");
 
 function setAuthCookie(res, token) {
   const cookieOptions = {
-    expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 1 day
+    expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

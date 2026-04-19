@@ -1,8 +1,7 @@
-const fs = require("fs");
 const doctorService = require("../services/doctorService");
 const Document = require("../models/Document");
-const AccessLog = require("../models/AccessLog");
-const DownloadRequest = require("../models/DownloadRequest");
+const Activity = require("../models/Activity");
+const Consent = require("../models/Consent");
 const sendResponse = require("../utils/apiResponse");
 const AppError = require("../utils/AppError");
 const { streamLocalFile } = require("../utils/localFileStream");
@@ -15,15 +14,14 @@ async function streamDocument(req, res) {
     throw new AppError("Document not found", 404);
   }
 
-  // MANDATORY CHECK: Has the patient approved this specific doctor's download request?
-  // Only enforce this if they are trying to "Download" (save) the file.
-  // Standard "Opening/Viewing" in browser is allowed with just consent.
+  // Check for download approval in the unified Consent model
   if (req.query.download === "true") {
-    const approval = await DownloadRequest.findOne({
+    const approval = await Consent.findOne({
       doctorId: req.user.id,
       patientId: patientId,
       documentId: documentId,
-      status: "approved"
+      type: "grant",
+      status: "active"
     });
 
     if (!approval) {
@@ -31,8 +29,7 @@ async function streamDocument(req, res) {
     }
   }
 
-  // Log access
-  await AccessLog.create({
+  await Activity.create({
     patientId,
     doctorId: req.user.id,
     documentId: doc._id,

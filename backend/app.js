@@ -57,8 +57,9 @@ app.get("/", (req, res) => {
 app.use("/api", apiLimiter);
 
 app.get("/api/health", (req, res) => {
-  sendResponse(res, { message: "Health check passed", data: { status: "ok" } });
+  res.json({ success: true, message: "Health check passed", data: { status: "ok" } });
 });
+
 
 app.use("/api/auth", authRoutes);
 app.use("/api/patient", patientRoutes);

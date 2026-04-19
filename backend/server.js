@@ -15,13 +15,11 @@ process.on("unhandledRejection", (reason) => {
 connectDb()
   .then(() => {
     app.listen(env.port, () => {
-      logInfo(`Server listening on port ${env.port}`, {
-        env: env.nodeEnv,
-        corsOrigin: env.corsOrigin,
-      });
+      console.log(`Server listening on port ${env.port}`);
     });
   })
   .catch((error) => {
-    logError("Failed to connect DB", error);
+    console.error("Failed to connect DB:", error);
     process.exit(1);
   });
+

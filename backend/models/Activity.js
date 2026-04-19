@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const accessLogSchema = new mongoose.Schema(
+const activitySchema = new mongoose.Schema(
   {
     patientId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     doctorId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -12,4 +12,4 @@ const accessLogSchema = new mongoose.Schema(
   { timestamps: { createdAt: "timestamp", updatedAt: false } }
 );
 
-module.exports = mongoose.model("AccessLog", accessLogSchema);
+module.exports = mongoose.model("Activity", activitySchema);

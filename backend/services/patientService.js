@@ -1,13 +1,14 @@
 const path = require("path");
 const qrcode = require("qrcode");
+const mongoose = require("mongoose");
 const Document = require("../models/Document");
-const AccessToken = require("../models/AccessToken");
-const AccessLog = require("../models/AccessLog");
-const DownloadRequest = require("../models/DownloadRequest");
-const DoctorHistory = require("../models/DoctorHistory");
+const Consent = require("../models/Consent");
+const Activity = require("../models/Activity");
 const AppError = require("../utils/AppError");
 const { generateOtp, generateToken, hashToken } = require("../utils/tokens");
 const env = require("../config/env");
+const { getBucket } = require("../config/gridfs");
+const { Readable } = require("stream");
 
 function toLogSummary(log) {
   return {
@@ -21,7 +22,6 @@ function toLogSummary(log) {
   };
 }
 
-
 function toDocumentSummary(doc) {
   return {
     id: doc._id,
@@ -33,39 +33,52 @@ function toDocumentSummary(doc) {
   };
 }
 
-function toAccessSummary(token) {
+function toAccessSummary(consent) {
   return {
-    _id: token._id,
-    type: token.type,
-    expiresAt: token.expiresAt,
-    usedAt: token.usedAt,
-    createdAt: token.createdAt,
-    documentId: token.documentId || null,
-    doctor: token.doctorId
-      ? { id: token.doctorId._id, name: token.doctorId.name }
+    _id: consent._id,
+    type: consent.type,
+    expiresAt: consent.expiresAt,
+    usedAt: consent.usedAt,
+    createdAt: consent.createdAt,
+    documentId: consent.documentId || null,
+    doctor: consent.doctorId
+      ? { id: consent.doctorId._id, name: consent.doctorId.name }
       : null,
   };
 }
 
 async function uploadDocument(userId, file) {
-  // Multer diskStorage has already saved the file by now
-  // file.path contains the relative or absolute path depending on configuration
-  const relativePath = path.relative(process.cwd(), file.path);
+  try {
+    const bucket = getBucket();
+    const uploadStream = bucket.openUploadStream(file.originalname, {
+      contentType: file.mimetype,
+      metadata: { patientId: userId }
+    });
 
-  const doc = await Document.create({
-    patientId: userId,
-    originalName: file.originalname,
-    mimeType: file.mimetype,
-    size: file.size,
-    fileUrl: `${env.appBaseUrl}/api/patient/documents/stream/TEMPID`, // Fixed in next step or via ID
-    storagePath: relativePath,
-  });
+    const fileId = uploadStream.id;
+    const readableStream = new Readable();
+    readableStream.push(file.buffer);
+    readableStream.push(null);
 
-  // Update fileUrl with the real ID
-  doc.fileUrl = `${env.appBaseUrl}/api/patient/documents/stream/${doc._id}`;
-  await doc.save();
+    await new Promise((resolve, reject) => {
+      readableStream.pipe(uploadStream).on("error", reject).on("finish", resolve);
+    });
 
-  return toDocumentSummary(doc);
+    const doc = await Document.create({
+      patientId: userId,
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      size: file.size,
+      fileUrl: `${env.appBaseUrl}/api/patient/documents/stream/TEMPID`,
+      storagePath: `gridfs:${fileId}`,
+    });
+
+    doc.fileUrl = `${env.appBaseUrl}/api/patient/documents/stream/${doc._id}`;
+    await doc.save();
+    return toDocumentSummary(doc);
+  } catch (error) {
+    throw new AppError("Failed to store document", 500);
+  }
 }
 
 async function listDocuments(userId) {
@@ -76,60 +89,50 @@ async function listDocuments(userId) {
 async function createQrAccess(userId, documentId = null) {
   const token = generateToken();
   const expiresAt = new Date(Date.now() + env.tokenTtlMin * 60 * 1000);
-
   const accessUrl = `${env.appBaseUrl}/api/access/${token}`;
 
-  await AccessToken.create({
+  await Consent.create({
     patientId: userId,
     documentId: documentId || null,
     type: "qr",
     tokenHash: hashToken(token),
     expiresAt,
   });
-  const qrDataUrl = await qrcode.toDataURL(accessUrl, { errorCorrectionLevel: "M", width: 300 });
 
-  return {
-    qrDataUrl,
-    accessUrl,
-    expiresAt,
-    durationMinutes: env.tokenTtlMin,
-  };
+  const qrDataUrl = await qrcode.toDataURL(accessUrl, { width: 300 });
+  return { qrDataUrl, accessUrl, expiresAt, durationMinutes: env.tokenTtlMin };
 }
 
 async function createOtpAccess(userId) {
   const otp = generateOtp();
   const expiresAt = new Date(Date.now() + env.otpTtlMin * 60 * 1000);
 
-  await AccessToken.create({
+  await Consent.create({
     patientId: userId,
     type: "otp",
     tokenHash: hashToken(otp),
     expiresAt,
   });
 
-  return {
-    otp,
-    expiresAt,
-    durationMinutes: env.otpTtlMin,
-  };
+  return { otp, expiresAt, durationMinutes: env.otpTtlMin };
 }
 
 async function listActiveAccess(userId) {
-  const tokens = await AccessToken.find({
+  const consents = await Consent.find({
     patientId: userId,
-    revokedAt: null,
+    status: "active",
+    type: { $in: ["qr", "otp", "grant"] },
     expiresAt: { $gt: new Date() },
-  })
-    .populate("doctorId", "name")
-    .lean();
-  return tokens.map(toAccessSummary);
+  }).populate("doctorId", "name").lean();
+  
+  return consents.map(toAccessSummary);
 }
 
 async function revokeAccess(userId, consentId) {
-  const token = await AccessToken.findOne({ _id: consentId, patientId: userId });
-  if (!token) throw new AppError("Consent not found", 404);
-  token.revokedAt = new Date();
-  await token.save();
+  const consent = await Consent.findOne({ _id: consentId, patientId: userId });
+  if (!consent) throw new AppError("Consent not found", 404);
+  consent.status = "revoked";
+  await consent.save();
   return { success: true };
 }
 
@@ -137,58 +140,49 @@ async function deleteDocument(userId, docId) {
   const doc = await Document.findOne({ _id: docId, patientId: userId });
   if (!doc) throw new AppError("Document not found", 404);
 
-  // 1. Delete physical file
-  const absolutePath = path.isAbsolute(doc.storagePath)
-    ? doc.storagePath
-    : path.join(process.cwd(), doc.storagePath);
-
-  if (require("fs").existsSync(absolutePath)) {
-    require("fs").unlinkSync(absolutePath);
+  if (doc.storagePath.startsWith("gridfs:")) {
+    const bucket = getBucket();
+    const fileId = doc.storagePath.split(":")[1];
+    try { await bucket.delete(new mongoose.Types.ObjectId(fileId)); } catch (e) {}
+  } else if (!doc.storagePath.startsWith("http")) {
+    const absPath = path.isAbsolute(doc.storagePath) ? doc.storagePath : path.join(process.cwd(), doc.storagePath);
+    if (require("fs").existsSync(absPath)) require("fs").unlinkSync(absPath);
   }
 
-  // 2. Delete DB record
   await Document.deleteOne({ _id: docId });
-
   return { success: true };
 }
 
 async function listLogs(userId, limit = 100) {
-  const logs = await AccessLog.find({ patientId: userId })
+  const logs = await Activity.find({ patientId: userId })
     .populate("doctorId", "name")
     .populate("documentId", "originalName")
     .sort({ timestamp: -1 })
-    .limit(parseInt(limit) || 100)
-    .lean();
-
+    .limit(parseInt(limit) || 100).lean();
   return logs.map(toLogSummary);
 }
 
 async function getDownloadRequests(patientId) {
-  return DownloadRequest.find({ patientId, status: "pending" })
+  return Consent.find({ patientId, status: "pending", type: "request" })
     .populate("doctorId", "name")
     .populate("documentId", "originalName")
-    .sort({ createdAt: -1 })
-    .lean();
+    .sort({ createdAt: -1 }).lean();
 }
 
 async function respondToRequest(patientId, requestId, status) {
-  const request = await DownloadRequest.findOne({ _id: requestId, patientId });
+  const request = await Consent.findOne({ _id: requestId, patientId, type: "request" });
   if (!request) throw new AppError("Request not found", 404);
 
-  request.status = status;
+  if (status === "approved") {
+    request.status = "active";
+    request.type = "grant";
+    request.expiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+  } else {
+    request.status = "revoked";
+  }
+  
   request.respondedAt = new Date();
   await request.save();
-
-  // If approved, add/update 3-day history for this doctor
-  if (status === "approved") {
-    const expiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-    await DoctorHistory.findOneAndUpdate(
-      { doctorId: request.doctorId, patientId: request.patientId },
-      { $set: { expiresAt } },
-      { upsert: true }
-    );
-  }
-
   return request;
 }
 
