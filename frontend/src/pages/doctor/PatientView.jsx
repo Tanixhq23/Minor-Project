@@ -101,7 +101,7 @@ export default function PatientView() {
 
                         <div className="d-flex gap-2 w-100 w-md-auto ms-auto ms-md-0">
                           <a
-                            href={doc.fileUrl}
+                            href={`${doc.fileUrl}?token=${localStorage.getItem("token")}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="btn btn-outline-primary btn-sm px-3 flex-fill shadow-sm fw-bold"
@@ -111,7 +111,7 @@ export default function PatientView() {
 
                           {doc.approvalStatus === "approved" ? (
                             <a
-                              href={`${doc.fileUrl}?download=true`}
+                              href={`${doc.fileUrl}?download=true&token=${localStorage.getItem("token")}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="btn btn-primary btn-sm px-3 flex-fill fw-bold shadow-sm"
@@ -120,6 +120,7 @@ export default function PatientView() {
                               Download
                             </a>
                           ) : doc.approvalStatus === "pending" ? (
+
                             <button className="btn btn-secondary btn-sm px-3 flex-fill fw-bold opacity-75" disabled>
                                Pending...
                             </button>

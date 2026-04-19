@@ -151,14 +151,26 @@ export default function Dashboard() {
                       </td>
                       <td className="small">{new Date(doc.createdAt).toLocaleDateString()}</td>
                       <td className="text-end">
-                        <button 
-                          onClick={() => handleDelete(doc.id)}
-                          className="btn btn-link link-danger p-1"
-                          title="Delete document"
-                        >
-                          <i className="bi bi-trash3 fs-5"></i>
-                        </button>
+                        <div className="d-flex justify-content-end gap-2">
+                          <a 
+                            href={`${doc.fileUrl}?token=${localStorage.getItem('token')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-link link-primary p-1"
+                            title="View document"
+                          >
+                            <i className="bi bi-eye fs-5"></i>
+                          </a>
+                          <button 
+                            onClick={() => handleDelete(doc.id)}
+                            className="btn btn-link link-danger p-1"
+                            title="Delete document"
+                          >
+                            <i className="bi bi-trash3 fs-5"></i>
+                          </button>
+                        </div>
                       </td>
+
                     </tr>
                   ))}
                 </tbody>
