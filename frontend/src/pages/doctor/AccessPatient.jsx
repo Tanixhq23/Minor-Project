@@ -39,14 +39,12 @@ export default function AccessPatient() {
     }, 1500);
   };
 
-  const startScanner = async () => {
-    setIsScanning(true);
-    setError("");
-    const html5QrCode = new Html5Qrcode("reader");
-    scannerRef.current = html5QrCode;
+  useEffect(() => {
+    if (isScanning && !scannerRef.current) {
+      const html5QrCode = new Html5Qrcode("reader");
+      scannerRef.current = html5QrCode;
 
-    try {
-      await html5QrCode.start(
+      html5QrCode.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         async (decodedText) => {
@@ -59,18 +57,31 @@ export default function AccessPatient() {
           }
         },
         (errorMessage) => {
-          // ignore scan errors as they happen constantly during scanning
+          // ignore scan errors
         }
-      );
-    } catch (err) {
-      setError("Camera access denied or error occurred. Please ensure permissions are granted.");
-      setIsScanning(false);
+      ).catch(err => {
+        setError("Camera access denied or error occurred. Please ensure permissions are granted.");
+        setIsScanning(false);
+      });
     }
+
+    return () => {
+      // Cleanup is handled by stopScanner or component unmount
+    };
+  }, [isScanning]);
+
+  const startScanner = () => {
+    setIsScanning(true);
+    setError("");
   };
 
   const stopScanner = async () => {
     if (scannerRef.current) {
-      await scannerRef.current.stop();
+      try {
+        await scannerRef.current.stop();
+      } catch (e) {
+        console.error("Stop failed", e);
+      }
       scannerRef.current = null;
     }
     setIsScanning(false);

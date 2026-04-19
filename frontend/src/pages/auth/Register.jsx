@@ -10,12 +10,14 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
+  const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
     try {
       const data = await register(name, email, password, role);
       const user = data.data.user;
@@ -26,6 +28,7 @@ export default function Register() {
       }
     } catch (err) {
       setError(err.response?.data?.message || "Registration failed. Try again.");
+      setIsLoading(false);
     }
   };
 
@@ -44,6 +47,7 @@ export default function Register() {
             type="button" 
             className={`btn py-2 fw-bold ${role === 'patient' ? 'btn-primary' : 'btn-outline-primary'}`}
             onClick={() => setRole("patient")}
+            disabled={isLoading}
           >
             Patient
           </button>
@@ -51,6 +55,7 @@ export default function Register() {
             type="button" 
             className={`btn py-2 fw-bold ${role === 'doctor' ? 'btn-success' : 'btn-outline-success'}`}
             onClick={() => setRole("doctor")}
+            disabled={isLoading}
           >
             Doctor
           </button>
@@ -64,6 +69,7 @@ export default function Register() {
             placeholder="John Doe" 
             value={name}
             onChange={(e) => setName(e.target.value)}
+            disabled={isLoading}
             required
           />
         </div>
@@ -76,6 +82,7 @@ export default function Register() {
             placeholder="john@example.com" 
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={isLoading}
             required
           />
         </div>
@@ -88,12 +95,20 @@ export default function Register() {
             placeholder="••••••••" 
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            disabled={isLoading}
             required
           />
         </div>
 
-        <button type="submit" className={`btn w-100 py-2 fw-bold shadow-sm ${role === 'patient' ? 'btn-primary' : 'btn-success'}`}>
-          Register as {role === 'patient' ? 'Patient' : 'Doctor'}
+        <button type="submit" className={`btn w-100 py-2 fw-bold shadow-sm d-flex align-items-center justify-content-center ${role === 'patient' ? 'btn-primary' : 'btn-success'}`} disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              Creating Account...
+            </>
+          ) : (
+            `Register as ${role === 'patient' ? 'Patient' : 'Doctor'}`
+          )}
         </button>
       </form>
 

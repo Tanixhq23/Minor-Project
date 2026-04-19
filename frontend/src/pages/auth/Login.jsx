@@ -7,12 +7,14 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
     try {
       const data = await login(email, password);
       // Determine where to redirect based on role
@@ -24,6 +26,7 @@ export default function Login() {
       }
     } catch (err) {
       setError(err.response?.data?.message || "Login failed. Please check credentials.");
+      setIsLoading(false);
     }
   };
 
@@ -45,6 +48,7 @@ export default function Login() {
             placeholder="name@example.com" 
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={isLoading}
             required
           />
         </div>
@@ -57,12 +61,20 @@ export default function Login() {
             placeholder="••••••••" 
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            disabled={isLoading}
             required
           />
         </div>
 
-        <button type="submit" className="btn btn-primary w-100 py-2 fw-bold shadow-sm">
-          Log In
+        <button type="submit" className="btn btn-primary w-100 py-2 fw-bold shadow-sm d-flex align-items-center justify-content-center" disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              Authenticating...
+            </>
+          ) : (
+            "Log In"
+          )}
         </button>
       </form>
 
