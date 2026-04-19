@@ -39,7 +39,11 @@ async function createAccessPayload(access) {
   };
 }
 
-async function accessWithQr(token, doctorId) {
+async function accessWithQr(tokenInput, doctorId) {
+  const token = tokenInput.includes("/")
+    ? tokenInput.trim().split("/").pop()
+    : tokenInput.trim();
+
   const access = await consumeToken({ token, type: "qr", doctorId });
 
   if (!access) {
@@ -192,7 +196,11 @@ async function requestDownload(doctorId, patientId, documentId) {
   });
 }
 
-async function getDocumentFromToken(token, doctorId) {
+async function getDocumentFromToken(tokenInput, doctorId) {
+  const token = tokenInput.includes("/")
+    ? tokenInput.trim().split("/").pop()
+    : tokenInput.trim();
+
   const access = await consumeToken({
     token,
     type: "qr",

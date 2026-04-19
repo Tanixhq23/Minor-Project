@@ -15,6 +15,7 @@ const { errorHandler, notFoundHandler } = require("./middlewares/errorMiddleware
 const { handleUploadError } = require("./middlewares/uploadMiddleware");
 
 const app = express();
+app.set("trust proxy", 1);
 
 app.use(helmet());
 app.use(
