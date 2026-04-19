@@ -6,9 +6,12 @@ const Consent = require("../models/Consent");
 const Activity = require("../models/Activity");
 const AppError = require("../utils/AppError");
 const { generateOtp, generateToken, hashToken } = require("../utils/tokens");
-const env = require("../config/env");
 const { getBucket } = require("../config/gridfs");
 const { Readable } = require("stream");
+
+function getBaseUrl() {
+  return process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || "http://localhost:5000";
+}
 
 function toLogSummary(log) {
   return {
@@ -28,7 +31,7 @@ function toDocumentSummary(doc) {
     originalName: doc.originalName,
     mimeType: doc.mimeType,
     size: doc.size,
-    fileUrl: `${env.appBaseUrl}/api/patient/documents/stream/${doc._id}`,
+    fileUrl: `${getBaseUrl()}/api/patient/documents/stream/${doc._id}`,
     createdAt: doc.createdAt,
   };
 }
@@ -69,11 +72,11 @@ async function uploadDocument(userId, file) {
       originalName: file.originalname,
       mimeType: file.mimetype,
       size: file.size,
-      fileUrl: `${env.appBaseUrl}/api/patient/documents/stream/TEMPID`,
+      fileUrl: `${getBaseUrl()}/api/patient/documents/stream/TEMPID`,
       storagePath: `gridfs:${fileId}`,
     });
 
-    doc.fileUrl = `${env.appBaseUrl}/api/patient/documents/stream/${doc._id}`;
+    doc.fileUrl = `${getBaseUrl()}/api/patient/documents/stream/${doc._id}`;
     await doc.save();
     return toDocumentSummary(doc);
   } catch (error) {
@@ -88,8 +91,9 @@ async function listDocuments(userId) {
 
 async function createQrAccess(userId, documentId = null) {
   const token = generateToken();
-  const expiresAt = new Date(Date.now() + env.tokenTtlMin * 60 * 1000);
-  const accessUrl = `${env.appBaseUrl}/api/access/${token}`;
+  const ttl = Number(process.env.TOKEN_TTL_MIN || 15);
+  const expiresAt = new Date(Date.now() + ttl * 60 * 1000);
+  const accessUrl = `${getBaseUrl()}/api/access/${token}`;
 
   await Consent.create({
     patientId: userId,
@@ -100,12 +104,13 @@ async function createQrAccess(userId, documentId = null) {
   });
 
   const qrDataUrl = await qrcode.toDataURL(accessUrl, { width: 300 });
-  return { qrDataUrl, accessUrl, expiresAt, durationMinutes: env.tokenTtlMin };
+  return { qrDataUrl, accessUrl, expiresAt, durationMinutes: ttl };
 }
 
 async function createOtpAccess(userId) {
   const otp = generateOtp();
-  const expiresAt = new Date(Date.now() + env.otpTtlMin * 60 * 1000);
+  const ttl = Number(process.env.OTP_TTL_MIN || 8);
+  const expiresAt = new Date(Date.now() + ttl * 60 * 1000);
 
   await Consent.create({
     patientId: userId,
@@ -114,7 +119,7 @@ async function createOtpAccess(userId) {
     expiresAt,
   });
 
-  return { otp, expiresAt, durationMinutes: env.otpTtlMin };
+  return { otp, expiresAt, durationMinutes: ttl };
 }
 
 async function listActiveAccess(userId) {

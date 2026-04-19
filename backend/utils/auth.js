@@ -1,10 +1,14 @@
 const jwt = require("jsonwebtoken");
-const env = require("../config/env");
 
 function signToken(user) {
-  return jwt.sign({ sub: user._id.toString(), role: user.role }, env.jwtSecret, {
-    expiresIn: env.jwtExpiresIn,
-  });
+  const secret = process.env.JWT_SECRET;
+  const expiresIn = process.env.JWT_EXPIRES_IN || "1d";
+  
+  return jwt.sign(
+    { sub: user._id.toString(), role: user.role }, 
+    secret, 
+    { expiresIn }
+  );
 }
 
 module.exports = {

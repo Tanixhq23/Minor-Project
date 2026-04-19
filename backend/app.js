@@ -4,12 +4,11 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const cookieParser = require("cookie-parser");
 const rateLimit = require("express-rate-limit");
-const env = require("./config/env");
+
 const authRoutes = require("./routes/authRoutes");
 const patientRoutes = require("./routes/patientRoutes");
 const doctorRoutes = require("./routes/doctorRoutes");
 const accessRoutes = require("./routes/accessRoutes");
-const sendResponse = require("./utils/apiResponse");
 const { loggerStream, logWarn } = require("./utils/logger");
 const { errorHandler, notFoundHandler } = require("./middlewares/errorMiddleware");
 const { handleUploadError } = require("./middlewares/uploadMiddleware");
@@ -17,17 +16,20 @@ const { handleUploadError } = require("./middlewares/uploadMiddleware");
 const app = express();
 app.set("trust proxy", 1);
 
+const isProduction = !!process.env.RENDER;
+
 app.use(helmet());
 app.use(
   cors({
-    origin: env.corsOrigin,
+    origin: process.env.CORS_ORIGIN || (isProduction ? "https://healthlock-frontend.onrender.com" : "*"),
     credentials: true,
   })
 );
+
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
 app.use(
-  morgan(env.nodeEnv === "production" ? "combined" : ":method :url :status :response-time ms", {
+  morgan(isProduction ? "combined" : ":method :url :status :response-time ms", {
     stream: loggerStream,
   })
 );
@@ -59,7 +61,6 @@ app.use("/api", apiLimiter);
 app.get("/api/health", (req, res) => {
   res.json({ success: true, message: "Health check passed", data: { status: "ok" } });
 });
-
 
 app.use("/api/auth", authRoutes);
 app.use("/api/patient", patientRoutes);

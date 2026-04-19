@@ -1,6 +1,5 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-const env = require("../config/env");
 const AppError = require("../utils/AppError");
 
 async function requireAuth(req, res, next) {
@@ -15,7 +14,8 @@ async function requireAuth(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(jwtToken, env.jwtSecret);
+    const secret = process.env.JWT_SECRET;
+    const payload = jwt.verify(jwtToken, secret);
     const user = await User.findById(payload.sub).lean();
 
     if (!user) {

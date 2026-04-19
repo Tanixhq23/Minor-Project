@@ -1,7 +1,7 @@
+require("dotenv").config();
 const app = require("./app");
-const env = require("./config/env");
 const connectDb = require("./config/db");
-const { logError, logInfo } = require("./utils/logger");
+const { logError } = require("./utils/logger");
 
 process.on("uncaughtException", (error) => {
   logError("Uncaught exception", error);
@@ -12,14 +12,15 @@ process.on("unhandledRejection", (reason) => {
   logError("Unhandled promise rejection", reason);
 });
 
+const PORT = process.env.PORT || 5000;
+
 connectDb()
   .then(() => {
-    app.listen(env.port, () => {
-      console.log(`Server listening on port ${env.port}`);
+    app.listen(PORT, () => {
+      console.log(`Server listening on port ${PORT}`);
     });
   })
   .catch((error) => {
     console.error("Failed to connect DB:", error);
     process.exit(1);
   });
-

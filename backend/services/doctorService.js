@@ -7,7 +7,10 @@ const MedicalSummary = require("../models/MedicalSummary");
 const User = require("../models/User");
 const AppError = require("../utils/AppError");
 const { hashToken } = require("../utils/tokens");
-const env = require("../config/env");
+
+function getBaseUrl() {
+  return process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || "http://localhost:5000";
+}
 
 async function consumeToken({ token, type, doctorId }) {
   return Consent.findOneAndUpdate(
@@ -138,13 +141,12 @@ async function getPatientDocuments(patientId, doctorContext, consent) {
       originalName: doc.originalName,
       mimeType: doc.mimeType,
       size: doc.size,
-      fileUrl: `${env.appBaseUrl}/api/doctor/patient/${patientId}/documents/stream/${doc._id}`,
+      fileUrl: `${getBaseUrl()}/api/doctor/patient/${patientId}/documents/stream/${doc._id}`,
       createdAt: doc.createdAt,
       approvalStatus: status === "active" ? "approved" : status,
     };
   });
 }
-
 
 async function requestDownload(doctorId, patientId, documentId) {
   const existing = await Consent.findOne({ doctorId, patientId, documentId, type: "request" });
@@ -156,7 +158,7 @@ async function requestDownload(doctorId, patientId, documentId) {
     documentId,
     type: "request",
     status: "pending",
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // Requests live for 7 days
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   });
 }
 
