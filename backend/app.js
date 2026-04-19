@@ -49,6 +49,10 @@ const apiLimiter = rateLimit({
   },
 });
 
+app.get("/", (req, res) => {
+  res.send("HealthLock API is running");
+});
+
 app.use("/api", apiLimiter);
 
 app.get("/api/health", (req, res) => {
