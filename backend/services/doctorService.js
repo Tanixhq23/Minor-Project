@@ -131,16 +131,20 @@ async function getPatientDocuments(patientId, doctorContext, consent) {
     userAgent: doctorContext.userAgent,
   });
 
-  return docs.map((doc) => ({
-    id: doc._id,
-    originalName: doc.originalName,
-    mimeType: doc.mimeType,
-    size: doc.size,
-    fileUrl: `${env.appBaseUrl}/api/doctor/patient/${patientId}/documents/stream/${doc._id}`,
-    createdAt: doc.createdAt,
-    approvalStatus: requestMap[doc._id.toString()] || "none"
-  }));
+  return docs.map((doc) => {
+    const status = requestMap[doc._id.toString()] || "none";
+    return {
+      id: doc._id,
+      originalName: doc.originalName,
+      mimeType: doc.mimeType,
+      size: doc.size,
+      fileUrl: `${env.appBaseUrl}/api/doctor/patient/${patientId}/documents/stream/${doc._id}`,
+      createdAt: doc.createdAt,
+      approvalStatus: status === "active" ? "approved" : status,
+    };
+  });
 }
+
 
 async function requestDownload(doctorId, patientId, documentId) {
   const existing = await Consent.findOne({ doctorId, patientId, documentId, type: "request" });
